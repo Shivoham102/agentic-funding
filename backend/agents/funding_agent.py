@@ -145,7 +145,30 @@ TOOLS = [
             },
             "required": ["project_id", "status"]
         }
-    }
+    },
+    {
+        "name": "wait_and_fulfill",
+        "description": "Wait for a specified number of seconds, then automatically submit fulfillment evidence for a time-based escrow. Use this for demo/testing with time-based conditions.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The project ID"
+                },
+                "wait_seconds": {
+                    "type": "integer",
+                    "description": "Seconds to wait before submitting fulfillment (default 30)",
+                    "default": 30
+                },
+                "escrow_created_at": {
+                    "type": "string",
+                    "description": "ISO timestamp of when the escrow was created"
+                }
+            },
+            "required": ["project_id", "wait_seconds"]
+        }
+    },
 ]
 
 SYSTEM_PROMPT = """You are the Payment Agent for Agentic Funding, an AI-powered funding platform for developer projects.
@@ -161,18 +184,21 @@ Your job is to execute funding operations on-chain using escrow. When given a ta
 - Update project statuses
 
 ## Escrow flow:
-1. create_escrow: Lock tokens with a condition (e.g., "Release when project shows 30% user growth")
-2. submit_fulfillment: Project provides evidence of meeting the condition
+1. create_escrow: Lock tokens with a condition (e.g., "Release after 30 seconds" for demo, or "Release when project shows 30% user growth" for production)
+2. submit_fulfillment: Submit evidence that the condition is met
 3. trigger_arbitration: LLM oracle evaluates the evidence against the condition
 4. collect_funds: If approved, tokens are released to the project
 
 ## Guidelines:
 - Always look up the project first using get_project before any operation
 - When funding a project, use the project's requested_funding field as the amount. If no amount was requested, ask for clarification. Never invent a funding amount.
-- When creating escrows, write clear, measurable conditions based on the project's category and stage
+- For demo/testing: use time-based conditions like "Release funds 30 seconds after escrow creation". Then use wait_and_fulfill to automatically wait and submit fulfillment.
+- For production: use measurable growth conditions based on the project's category and stage
+- When creating escrows, write clear, measurable conditions
 - When asked to check on projects, look up their escrow status
 - Report results clearly, including transaction hashes and UIDs when available
 - If something fails, explain what went wrong and suggest next steps
+- After creating an escrow with a time-based condition, automatically proceed to wait, fulfill, arbitrate, and collect unless told otherwise
 """
 
 USDC_DECIMALS = 6
@@ -272,11 +298,33 @@ class FundingAgent:
 
             elif tool_name == "create_escrow":
                 raw_amount = int(tool_input["amount_usdc"] * (10 ** USDC_DECIMALS))
-                return await self.payment_agent.create_escrow(
+                result = await self.payment_agent.create_escrow(
                     project_id=tool_input["project_id"],
                     amount=raw_amount,
                     demand=tool_input["demand"],
                 )
+                # Store escrow info in the project document
+                if result.get("escrow_uid"):
+                    db = get_database()
+                    if db:
+                        from bson import ObjectId
+                        from datetime import datetime, timezone
+                        await db.projects.update_one(
+                            {"_id": ObjectId(tool_input["project_id"])},
+                            {"$set": {
+                                "escrow_info": {
+                                    "escrow_uid": result["escrow_uid"],
+                                    "amount": result["amount"],
+                                    "demand": result["demand"],
+                                    "status": "active",
+                                    "created_at": result.get("timestamp"),
+                                },
+                                "status": "funded",
+                                "funding_amount": tool_input["amount_usdc"],
+                                "updated_at": datetime.now(timezone.utc),
+                            }}
+                        )
+                return result
 
             elif tool_name == "submit_fulfillment":
                 return await self.payment_agent.submit_fulfillment(
@@ -305,6 +353,37 @@ class FundingAgent:
                     tool_input["project_id"],
                     tool_input["status"],
                 )
+
+            elif tool_name == "wait_and_fulfill":
+                import asyncio
+                wait_secs = tool_input.get("wait_seconds", 30)
+                project_id = tool_input["project_id"]
+                logger.info(f"Waiting {wait_secs}s for time-based escrow on project {project_id}")
+                await asyncio.sleep(wait_secs)
+
+                escrow_uid = await self._get_escrow_uid(project_id)
+                created_at = tool_input.get("escrow_created_at", "unknown time")
+                evidence = (
+                    f"The escrow was created at {created_at}. "
+                    f"{wait_secs} seconds have now elapsed. "
+                    f"The time-based condition of waiting {wait_secs} seconds has been fulfilled."
+                )
+                result = await self.payment_agent.submit_fulfillment(
+                    escrow_uid=escrow_uid,
+                    fulfillment_evidence=evidence,
+                )
+
+                # Store fulfillment UID in the project
+                if result.get("fulfillment_uid"):
+                    db = get_database()
+                    if db:
+                        from bson import ObjectId
+                        await db.projects.update_one(
+                            {"_id": ObjectId(project_id)},
+                            {"$set": {"escrow_info.fulfillment_uid": result["fulfillment_uid"]}}
+                        )
+
+                return result
 
             else:
                 return {"error": f"Unknown tool: {tool_name}"}
