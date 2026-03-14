@@ -1,15 +1,92 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 interface Project {
   id: string;
   name: string;
   website_url: string;
   tagline?: string;
+  description?: string;
   category: string;
   status: string;
   ranking_score?: number;
+  funding_amount?: number;
+  stage?: string;
+}
+
+function StatusBadge({ status }: { status: string }) {
+  let bg: string;
+  let text: string;
+
+  switch (status) {
+    case "funded":
+      bg = "rgba(34,197,94,0.15)";
+      text = "#22C55E";
+      break;
+    case "ranked":
+      bg = "rgba(139,92,246,0.15)";
+      text = "#A78BFA";
+      break;
+    case "reviewed":
+      bg = "rgba(59,130,246,0.15)";
+      text = "#60A5FA";
+      break;
+    case "processing":
+    case "under_review":
+      bg = "rgba(234,179,8,0.15)";
+      text = "#EAB308";
+      break;
+    case "rejected":
+      bg = "rgba(239,68,68,0.15)";
+      text = "#EF4444";
+      break;
+    default:
+      bg = "rgba(255,255,255,0.06)";
+      text = "#A1A1AA";
+      break;
+  }
+
+  return (
+    <span
+      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap"
+      style={{ backgroundColor: bg, color: text }}
+    >
+      {status}
+    </span>
+  );
+}
+
+function StageBadge({ stage }: { stage: string }) {
+  return (
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[#A1A1AA] whitespace-nowrap">
+      {stage}
+    </span>
+  );
+}
+
+function SkeletonCards() {
+  return (
+    <div className="space-y-4">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="glass-card p-5 sm:p-6">
+          <div className="animate-pulse">
+            <div className="flex items-center justify-between mb-3">
+              <div className="h-5 bg-[rgba(255,255,255,0.06)] rounded w-1/3" />
+              <div className="h-5 bg-[rgba(255,255,255,0.04)] rounded-full w-20" />
+            </div>
+            <div className="h-3 bg-[rgba(255,255,255,0.04)] rounded w-2/3 mb-2" />
+            <div className="h-3 bg-[rgba(255,255,255,0.03)] rounded w-1/4 mb-4" />
+            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[rgba(255,255,255,0.04)]">
+              <div className="h-5 bg-[rgba(255,255,255,0.04)] rounded-full w-16" />
+              <div className="h-5 bg-[rgba(255,255,255,0.04)] rounded-full w-14" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export default function DashboardPage() {
@@ -36,107 +113,149 @@ export default function DashboardPage() {
     fetchProjects();
   }, []);
 
-  const statusBadge = (status: string) => {
-    const base = "inline-block px-2 py-0.5 rounded text-xs font-medium";
-    switch (status) {
-      case "funded":
-        return `${base} bg-green-100 text-green-800`;
-      case "reviewed":
-        return `${base} bg-blue-100 text-blue-800`;
-      case "processing":
-      case "under_review":
-        return `${base} bg-yellow-100 text-yellow-800`;
-      default:
-        return `${base} bg-gray-100 text-gray-600`;
-    }
-  };
-
-  const categoryBadge =
-    "inline-block px-2 py-0.5 rounded text-xs font-medium bg-[var(--section-bg)] text-[var(--muted)]";
-
-  if (loading) {
-    return (
-      <div className="text-center py-20">
-        <p className="text-[var(--muted)] text-sm">Loading projects...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-center py-20">
-        <h1 className="text-2xl font-bold mb-3 text-[var(--foreground)]">
-          Project Dashboard
-        </h1>
-        <p className="text-[var(--muted)] text-sm mb-1">
-          Unable to load projects from the API.
-        </p>
-        <p className="text-[var(--muted-light)] text-xs">
-          Make sure the backend is running at{" "}
-          {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6 text-[var(--foreground)]">
-        Funded Projects
-      </h1>
-
-      {projects.length === 0 ? (
-        <div className="text-center py-16 bg-[var(--section-bg)] rounded-lg">
-          <p className="text-[var(--muted)] text-sm mb-1">
-            No projects yet.
-          </p>
-          <p className="text-[var(--muted-light)] text-xs">
-            Projects that have been submitted will appear here.
+    <div className="pt-28 pb-20">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        {/* Header */}
+        <div className="mb-8 animate-fade-in">
+          <p className="section-label">Dashboard</p>
+          <h1 className="text-3xl sm:text-4xl font-bold gradient-text mb-3">
+            All Projects
+          </h1>
+          <p className="text-[#71717A]">
+            Browse all submitted projects and their funding status
           </p>
         </div>
-      ) : (
-        <div className="space-y-3">
-          {projects.map((project) => (
-            <div
-              key={project.id}
-              className="bg-white border border-[var(--border)] rounded-lg p-4 flex items-start justify-between gap-4"
+
+        {/* Loading */}
+        {loading && <SkeletonCards />}
+
+        {/* Error */}
+        {error && (
+          <div
+            className="glass-card p-8 sm:p-12 text-center animate-fade-in"
+            style={{
+              borderColor: "rgba(239, 68, 68, 0.3)",
+              background: "rgba(239, 68, 68, 0.03)",
+            }}
+          >
+            <div className="mx-auto mb-4 w-12 h-12 rounded-full flex items-center justify-center border border-[rgba(239,68,68,0.2)]">
+              <svg
+                className="w-6 h-6 text-[#EF4444]"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+                />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-white mb-2">
+              Unable to Load Projects
+            </h3>
+            <p className="text-sm text-[#71717A] mb-1">
+              Could not connect to the API.
+            </p>
+            <p className="text-xs text-[#71717A]">
+              Make sure the backend is running at{" "}
+              {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}
+            </p>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loading && !error && projects.length === 0 && (
+          <div className="glass-card p-8 sm:p-12 text-center animate-fade-in">
+            <div className="mx-auto mb-4 w-12 h-12 rounded-full flex items-center justify-center border border-[rgba(255,255,255,0.1)]">
+              <svg
+                className="w-6 h-6 text-[#71717A]"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
+                />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-white mb-2">
+              No projects yet
+            </h3>
+            <p className="text-sm text-[#71717A] mb-6">
+              Be the first to apply for funding and get your project reviewed by
+              our AI agents.
+            </p>
+            <Link
+              href="/submit"
+              className="btn-gradient inline-block px-6 py-2.5 text-sm font-semibold"
             >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-sm font-semibold text-[var(--foreground)] truncate">
+              Apply for Funding
+            </Link>
+          </div>
+        )}
+
+        {/* Project Cards */}
+        {!loading && !error && projects.length > 0 && (
+          <div className="space-y-4 animate-fade-in">
+            {projects.map((project) => (
+              <div key={project.id} className="glass-card p-5 sm:p-6">
+                {/* Top row: name + status */}
+                <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                  <h3 className="font-semibold text-lg text-white">
                     {project.name}
                   </h3>
-                  <span className={categoryBadge}>{project.category}</span>
-                  <span className={statusBadge(project.status)}>
-                    {project.status}
-                  </span>
+                  <StatusBadge status={project.status} />
                 </div>
+
+                {/* Tagline */}
                 {project.tagline && (
-                  <p className="text-sm text-[var(--muted)] truncate">
+                  <p className="text-sm text-[#A1A1AA] mb-1.5 line-clamp-1">
                     {project.tagline}
                   </p>
                 )}
+
+                {/* Website URL */}
                 <a
                   href={project.website_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-[var(--accent)] hover:underline truncate block mt-1"
+                  className="text-xs text-[#8B5CF6] hover:text-[#A78BFA] transition-colors inline-block mb-3"
                 >
                   {project.website_url}
                 </a>
-              </div>
-              {project.ranking_score !== undefined && (
-                <div className="text-right shrink-0">
-                  <p className="text-xs text-[var(--muted-light)]">Score</p>
-                  <p className="text-lg font-bold text-[var(--foreground)]">
-                    {project.ranking_score}
-                  </p>
+
+                {/* Bottom row: badges + score */}
+                <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-[rgba(255,255,255,0.06)]">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[#A1A1AA]">
+                    {project.category}
+                  </span>
+                  {project.stage && <StageBadge stage={project.stage} />}
+
+                  {project.ranking_score !== undefined && (
+                    <span
+                      className="ml-auto inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold text-white"
+                      style={{
+                        background:
+                          "linear-gradient(135deg, rgba(139,92,246,0.2), rgba(59,130,246,0.2))",
+                        border: "1px solid rgba(139,92,246,0.3)",
+                      }}
+                    >
+                      Score: {project.ranking_score}
+                    </span>
+                  )}
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
