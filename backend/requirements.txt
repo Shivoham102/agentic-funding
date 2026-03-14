@@ -5,7 +5,5 @@ pydantic
 pydantic-settings
 python-dotenv
 httpx
-alkahest-py
-eth-abi
-web3
+anthropic
 apscheduler
