@@ -1,14 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 export default function SubmitPage() {
   const [formData, setFormData] = useState({
     name: "",
     website_url: "",
+    tagline: "",
     description: "",
-    github_url: "",
     category: "Other",
+    github_url: "",
+    team_size: "",
+    stage: "MVP",
+    funding_amount: "",
   });
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -31,51 +36,86 @@ export default function SubmitPage() {
     try {
       const apiUrl =
         process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const payload = {
+        ...formData,
+        team_size: formData.team_size ? Number(formData.team_size) : undefined,
+        funding_amount: formData.funding_amount
+          ? Number(formData.funding_amount)
+          : undefined,
+      };
       const res = await fetch(`${apiUrl}/api/projects`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) throw new Error("Submission failed");
 
-      console.log("Project submitted:", formData);
       setSuccess(true);
       setFormData({
         name: "",
         website_url: "",
+        tagline: "",
         description: "",
-        github_url: "",
         category: "Other",
+        github_url: "",
+        team_size: "",
+        stage: "MVP",
+        funding_amount: "",
       });
-    } catch (err) {
-      console.error("Submit error:", err);
+    } catch {
       setError("Failed to submit project. Please try again.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-3xl font-bold mb-8">Submit Your Project</h1>
+  if (success) {
+    return (
+      <div className="max-w-xl mx-auto text-center py-16">
+        <div className="text-4xl mb-4">🎉</div>
+        <h1 className="text-2xl font-bold mb-3 text-[var(--foreground)]">
+          Application Submitted!
+        </h1>
+        <p className="text-[var(--muted)] mb-6">
+          Our AI agents will review your project shortly. You&apos;ll be able to
+          track progress on the dashboard.
+        </p>
+        <Link
+          href="/dashboard"
+          className="inline-block bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-semibold px-6 py-2.5 rounded transition-colors text-sm"
+        >
+          Go to Dashboard
+        </Link>
+      </div>
+    );
+  }
 
-      {success && (
-        <div className="bg-green-900/50 border border-green-700 text-green-300 px-4 py-3 rounded-lg mb-6">
-          Project submitted successfully! Our AI agents will review it shortly.
-        </div>
-      )}
+  const inputClass =
+    "w-full px-3 py-2 bg-white border border-[var(--border)] rounded text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent";
+  const labelClass = "block text-sm font-medium mb-1.5 text-[var(--foreground)]";
+  const helperClass = "text-xs text-[var(--muted-light)] mt-1";
+
+  return (
+    <div className="max-w-xl mx-auto">
+      <h1 className="text-2xl font-bold mb-2 text-[var(--foreground)]">
+        Apply for Funding
+      </h1>
+      <p className="text-sm text-[var(--muted)] mb-8">
+        Tell us about your project. Our AI agents will review your application
+        automatically.
+      </p>
 
       {error && (
-        <div className="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg mb-6">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6 text-sm">
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div>
-          <label htmlFor="name" className="block text-sm font-medium mb-2">
-            Project Name *
+          <label htmlFor="name" className={labelClass}>
+            Project Name <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -84,17 +124,14 @@ export default function SubmitPage() {
             required
             value={formData.name}
             onChange={handleChange}
-            className="w-full px-4 py-2 bg-[var(--card-bg)] border border-[var(--border)] rounded-lg focus:outline-none focus:border-[var(--accent)]"
-            placeholder="My Awesome Project"
+            className={inputClass}
+            placeholder="My Project"
           />
         </div>
 
         <div>
-          <label
-            htmlFor="website_url"
-            className="block text-sm font-medium mb-2"
-          >
-            Website URL *
+          <label htmlFor="website_url" className={labelClass}>
+            Project Website <span className="text-red-500">*</span>
           </label>
           <input
             type="url"
@@ -103,17 +140,37 @@ export default function SubmitPage() {
             required
             value={formData.website_url}
             onChange={handleChange}
-            className="w-full px-4 py-2 bg-[var(--card-bg)] border border-[var(--border)] rounded-lg focus:outline-none focus:border-[var(--accent)]"
+            className={inputClass}
             placeholder="https://myproject.com"
           />
+          <p className={helperClass}>
+            We&apos;ll analyze your site automatically.
+          </p>
         </div>
 
         <div>
-          <label
-            htmlFor="description"
-            className="block text-sm font-medium mb-2"
-          >
-            Description *
+          <label htmlFor="tagline" className={labelClass}>
+            One-line Description <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            id="tagline"
+            name="tagline"
+            required
+            maxLength={140}
+            value={formData.tagline}
+            onChange={handleChange}
+            className={inputClass}
+            placeholder="A short tagline for your project"
+          />
+          <p className={helperClass}>
+            {formData.tagline.length}/140 characters
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="description" className={labelClass}>
+            Detailed Description <span className="text-red-500">*</span>
           </label>
           <textarea
             id="description"
@@ -122,43 +179,21 @@ export default function SubmitPage() {
             rows={4}
             value={formData.description}
             onChange={handleChange}
-            className="w-full px-4 py-2 bg-[var(--card-bg)] border border-[var(--border)] rounded-lg focus:outline-none focus:border-[var(--accent)] resize-vertical"
-            placeholder="Tell us about your project..."
+            className={`${inputClass} resize-vertical`}
+            placeholder="What does your project do? What problem does it solve?"
           />
         </div>
 
         <div>
-          <label
-            htmlFor="github_url"
-            className="block text-sm font-medium mb-2"
-          >
-            GitHub URL{" "}
-            <span className="text-[var(--muted)]">(optional)</span>
-          </label>
-          <input
-            type="url"
-            id="github_url"
-            name="github_url"
-            value={formData.github_url}
-            onChange={handleChange}
-            className="w-full px-4 py-2 bg-[var(--card-bg)] border border-[var(--border)] rounded-lg focus:outline-none focus:border-[var(--accent)]"
-            placeholder="https://github.com/user/repo"
-          />
-        </div>
-
-        <div>
-          <label
-            htmlFor="category"
-            className="block text-sm font-medium mb-2"
-          >
-            Category *
+          <label htmlFor="category" className={labelClass}>
+            Category
           </label>
           <select
             id="category"
             name="category"
             value={formData.category}
             onChange={handleChange}
-            className="w-full px-4 py-2 bg-[var(--card-bg)] border border-[var(--border)] rounded-lg focus:outline-none focus:border-[var(--accent)]"
+            className={inputClass}
           >
             <option value="DeFi">DeFi</option>
             <option value="Infrastructure">Infrastructure</option>
@@ -168,12 +203,89 @@ export default function SubmitPage() {
           </select>
         </div>
 
+        <div>
+          <label htmlFor="github_url" className={labelClass}>
+            GitHub Repository URL{" "}
+            <span className="text-[var(--muted-light)] font-normal">
+              (optional)
+            </span>
+          </label>
+          <input
+            type="url"
+            id="github_url"
+            name="github_url"
+            value={formData.github_url}
+            onChange={handleChange}
+            className={inputClass}
+            placeholder="https://github.com/user/repo"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div>
+            <label htmlFor="team_size" className={labelClass}>
+              Team Size{" "}
+              <span className="text-[var(--muted-light)] font-normal">
+                (optional)
+              </span>
+            </label>
+            <input
+              type="number"
+              id="team_size"
+              name="team_size"
+              min="1"
+              value={formData.team_size}
+              onChange={handleChange}
+              className={inputClass}
+              placeholder="e.g. 3"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="stage" className={labelClass}>
+              Current Stage
+            </label>
+            <select
+              id="stage"
+              name="stage"
+              value={formData.stage}
+              onChange={handleChange}
+              className={inputClass}
+            >
+              <option value="Idea">Idea</option>
+              <option value="MVP">MVP</option>
+              <option value="Beta">Beta</option>
+              <option value="Live">Live</option>
+              <option value="Scaling">Scaling</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="funding_amount" className={labelClass}>
+            Requested Funding Amount (USD){" "}
+            <span className="text-[var(--muted-light)] font-normal">
+              (optional)
+            </span>
+          </label>
+          <input
+            type="number"
+            id="funding_amount"
+            name="funding_amount"
+            min="0"
+            value={formData.funding_amount}
+            onChange={handleChange}
+            className={inputClass}
+            placeholder="e.g. 50000"
+          />
+        </div>
+
         <button
           type="submit"
           disabled={submitting}
-          className="w-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white font-semibold px-8 py-3 rounded-lg transition-colors"
+          className="w-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 text-white font-semibold px-6 py-2.5 rounded transition-colors text-sm cursor-pointer"
         >
-          {submitting ? "Submitting..." : "Submit Project"}
+          {submitting ? "Submitting..." : "Submit Application"}
         </button>
       </form>
     </div>

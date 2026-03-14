@@ -20,7 +20,7 @@ app = FastAPI(title="Agentic Funding API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,3 +32,8 @@ app.include_router(projects_router)
 @app.get("/")
 async def root() -> dict[str, Any]:
     return {"status": "ok", "service": "agentic-funding-api"}
+
+
+@app.get("/health")
+async def health() -> dict[str, str]:
+    return {"status": "healthy"}
