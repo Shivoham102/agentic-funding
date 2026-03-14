@@ -8,8 +8,8 @@ except ImportError:
     encode = None
 
 try:
-    from alkahest_py import AlkahestClient
-except ImportError:
+    from alkahest_py.alkahest_py import AlkahestClient
+except (ImportError, AttributeError):
     AlkahestClient = None
 
 from config import Settings
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Lazy import: alkahest-py may not export AlkahestClient in all versions; app still starts without it.
 def _get_alkahest_client():
     try:
-        from alkahest_py import AlkahestClient
+        from alkahest_py.alkahest_py import AlkahestClient
         return AlkahestClient
     except (ImportError, AttributeError) as e:
         logger.debug("AlkahestClient not available: %s", e)
@@ -43,12 +43,6 @@ class PaymentAgent:
 
     async def initialize(self) -> None:
         """Initialize the Alkahest client. Call once before using other methods."""
-        if AlkahestClient is None or encode is None:
-            logger.warning(
-                "Alkahest dependencies are not installed - payment agent running in dry-run mode"
-            )
-            return
-
         if not self.settings.ORACLE_PRIVATE_KEY:
             logger.warning("ORACLE_PRIVATE_KEY not set - payment agent running in dry-run mode")
             return
@@ -106,25 +100,25 @@ class PaymentAgent:
 
         # Step 1: Approve tokens for direct payment
         logger.info(f"Approving {immediate_amount} tokens for direct payment to {recipient_address}")
-        direct_approve_hash = self.client.erc20.approve(
+        direct_approve_hash = await self.client.erc20.approve(
             {"address": token_address, "value": immediate_amount},
             "payment",
         )
 
-        # Step 2: Execute direct payment (50%)
+        # Step 2: Execute direct payment (50%) via pay_with_erc20
         logger.info(f"Executing direct payment of {immediate_amount} to {recipient_address}")
-        direct_tx_hash = self.client.erc20.create_payment_obligation(
+        direct_tx_hash = await self.client.erc20.pay_with_erc20(
             {"address": token_address, "value": immediate_amount},
         )
 
         # Step 3: Approve tokens for escrow
         logger.info(f"Approving {escrow_amount} tokens for escrow")
-        escrow_approve_hash = self.client.erc20.approve(
+        escrow_approve_hash = await self.client.erc20.approve(
             {"address": token_address, "value": escrow_amount},
             "escrow",
         )
 
-        # Step 4: Create escrow with oracle arbiter condition
+        # Step 4: Create escrow with oracle arbiter condition via buy_with_erc20
         # Encode the demand: our oracle wallet address + condition identifier
         demand_bytes = encode(
             ["address", "bytes32"],
@@ -140,16 +134,17 @@ class PaymentAgent:
         }
 
         logger.info(f"Creating escrow of {escrow_amount} with oracle arbiter")
-        escrow_tx_hash = self.client.erc20.create_escrow_obligation(
+        escrow_tx_hash = await self.client.erc20.buy_with_erc20(
             {"address": token_address, "value": escrow_amount},
             arbiter_data,
+            0,  # expiration: 0 = no expiration
         )
 
         # Extract attestation UID from escrow receipt
         escrow_attestation_uid = None
         try:
             AlkahestClientCls = _get_alkahest_client()
-            if AlkahestClientCls:
+            if AlkahestClientCls and hasattr(AlkahestClientCls, 'get_attested_event'):
                 receipt = escrow_tx_hash  # The SDK may return receipt directly
                 attested_event = AlkahestClientCls.get_attested_event(receipt)
                 escrow_attestation_uid = str(attested_event.data.uid)
@@ -229,13 +224,16 @@ class PaymentAgent:
                 ],
             )
 
-            # Submit fulfillment attestation
+            # Submit fulfillment attestation via attestation.attest
             # The arbiter contract checks for this attestation from our oracle wallet
-            logger.info(f"Submitting release attestation for project {project_id}")
+            schema_uid = bytes.fromhex(project_id.ljust(64, '0')[:64])
+            logger.info(f"Submitting release attestation for project {project_id} (schema_uid={schema_uid.hex()})")
 
-            fulfillment_hash = self.client.string_obligation.create_obligation(
-                f"escrow_release:{project_id}",
+            fulfillment_hash = await self.client.attestation.attest(
+                schema_uid,
+                attestation_data,
             )
+            logger.info(f"Release attestation submitted for project {project_id}: {fulfillment_hash}")
 
             return {
                 "project_id": project_id,
