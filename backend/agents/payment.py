@@ -2,7 +2,15 @@ import logging
 from typing import Any
 from datetime import datetime, timezone
 
-from eth_abi import encode
+try:
+    from eth_abi import encode
+except ImportError:
+    encode = None
+
+try:
+    from alkahest_py import AlkahestClient
+except ImportError:
+    AlkahestClient = None
 
 from config import Settings
 
@@ -30,11 +38,17 @@ class PaymentAgent:
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.client: Any = None
+        self.client: Any | None = None
         self._initialized = False
 
     async def initialize(self) -> None:
         """Initialize the Alkahest client. Call once before using other methods."""
+        if AlkahestClient is None or encode is None:
+            logger.warning(
+                "Alkahest dependencies are not installed - payment agent running in dry-run mode"
+            )
+            return
+
         if not self.settings.ORACLE_PRIVATE_KEY:
             logger.warning("ORACLE_PRIVATE_KEY not set - payment agent running in dry-run mode")
             return
