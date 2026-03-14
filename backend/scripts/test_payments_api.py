@@ -17,37 +17,44 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Test payment API endpoints")
     parser.add_argument(
         "action",
-        choices=["process", "release", "oracle-check", "escrow-status"],
+        choices=["create-escrow", "fulfill", "arbitrate", "collect", "escrow-status"],
         help="Which endpoint to call",
     )
     parser.add_argument("--project-id", default="000000000000000000000000", help="MongoDB ObjectId (24 hex chars)")
-    parser.add_argument("--recipient", default="0x742d35Cc6634C0532925a3b844Bc454e4438f44e", help="EVM address for process")
-    parser.add_argument("--amount", type=int, default=100_000_000, help="Amount in smallest unit (e.g. 100e6 for 100 USDC)")
-    parser.add_argument("--escrow-uid", default="fake-escrow-uid", help="For release: escrow_attestation_uid")
+    parser.add_argument("--amount", type=float, default=100.0, help="Amount in USDC (human-readable)")
+    parser.add_argument("--demand", default="Release when project shows 30% user growth", help="Natural language condition")
+    parser.add_argument("--evidence", default="Project grew from 1000 to 1400 users (40%)", help="Fulfillment evidence")
     parser.add_argument("--base", default=BASE, help=f"API base URL (default {BASE})")
     args = parser.parse_args()
 
     with httpx.Client(timeout=30.0) as client:
-        if args.action == "process":
+        if args.action == "create-escrow":
             r = client.post(
-                f"{args.base}/api/payments/process",
+                f"{args.base}/api/payments/create-escrow",
                 json={
                     "project_id": args.project_id,
-                    "recipient_address": args.recipient,
                     "amount": args.amount,
-                    "arbiter_address": "",
+                    "demand": args.demand,
                 },
             )
-        elif args.action == "release":
+        elif args.action == "fulfill":
             r = client.post(
-                f"{args.base}/api/payments/release",
+                f"{args.base}/api/payments/fulfill",
                 json={
                     "project_id": args.project_id,
-                    "escrow_attestation_uid": args.escrow_uid,
+                    "fulfillment_evidence": args.evidence,
                 },
             )
-        elif args.action == "oracle-check":
-            r = client.post(f"{args.base}/api/payments/oracle/check")
+        elif args.action == "arbitrate":
+            r = client.post(
+                f"{args.base}/api/payments/arbitrate",
+                json={"project_id": args.project_id},
+            )
+        elif args.action == "collect":
+            r = client.post(
+                f"{args.base}/api/payments/collect",
+                json={"project_id": args.project_id},
+            )
         elif args.action == "escrow-status":
             r = client.get(f"{args.base}/api/payments/escrow/{args.project_id}")
         else:

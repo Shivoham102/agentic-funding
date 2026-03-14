@@ -1,4 +1,4 @@
-"""Tests for PaymentAgent (dry-run mode — no real chain or Alkahest required)."""
+"""Tests for PaymentAgent (dry-run mode — no real chain or NLA CLI required)."""
 import asyncio
 import unittest
 
@@ -9,7 +9,7 @@ from agents.payment import PaymentAgent
 
 
 class TestPaymentAgentDryRun(unittest.TestCase):
-    """Test payment agent in dry-run mode (no Alkahest, no private key)."""
+    """Test payment agent in dry-run mode (no NLA CLI, no private key)."""
 
     def setUp(self) -> None:
         self.settings = Settings()
@@ -24,75 +24,88 @@ class TestPaymentAgentDryRun(unittest.TestCase):
         asyncio.run(self._init_agent())
         self.assertFalse(self.agent._is_ready())
 
-    async def _process_payment(self) -> dict:
-        return await self.agent.process_payment(
+    async def _create_escrow(self) -> dict:
+        return await self.agent.create_escrow(
             project_id="test-project-123",
-            recipient_address="0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
             amount=100_000_000,  # 100e6 (e.g. 100 USDC with 6 decimals)
+            demand="Release when project shows 30% user growth",
         )
 
-    def test_process_payment_returns_dry_run_result(self) -> None:
-        """process_payment in dry-run returns expected structure and 50/50 split."""
+    def test_create_escrow_returns_dry_run_result(self) -> None:
+        """create_escrow in dry-run returns expected structure."""
         asyncio.run(self._init_agent())
-        result = asyncio.run(self._process_payment())
+        result = asyncio.run(self._create_escrow())
 
         self.assertEqual(result["project_id"], "test-project-123")
         self.assertEqual(result["status"], "dry_run")
-        self.assertEqual(result["total_amount"], 100_000_000)
-        self.assertEqual(result["immediate_amount"], 50_000_000)
-        self.assertEqual(result["escrowed_amount"], 50_000_000)
-        self.assertIsNone(result["direct_tx_hash"])
-        self.assertIsNone(result["escrow_tx_hash"])
-        self.assertIsNone(result["escrow_attestation_uid"])
+        self.assertEqual(result["amount"], 100_000_000)
+        self.assertEqual(result["demand"], "Release when project shows 30% user growth")
+        self.assertIsNone(result["escrow_uid"])
         self.assertIn("timestamp", result)
 
-    async def _release_escrow(self) -> dict:
-        return await self.agent.release_escrow(
-            project_id="test-project-123",
-            escrow_attestation_uid="fake-uid-123",
+    async def _submit_fulfillment(self) -> dict:
+        return await self.agent.submit_fulfillment(
+            escrow_uid="0xfake-escrow-uid",
+            fulfillment_evidence="Project grew from 1000 to 1400 users (40%)",
         )
 
-    def test_release_escrow_returns_dry_run_result(self) -> None:
-        """release_escrow in dry-run returns released: False."""
+    def test_submit_fulfillment_returns_dry_run_result(self) -> None:
+        """submit_fulfillment in dry-run returns expected structure."""
         asyncio.run(self._init_agent())
-        result = asyncio.run(self._release_escrow())
+        result = asyncio.run(self._submit_fulfillment())
 
-        self.assertEqual(result["project_id"], "test-project-123")
         self.assertEqual(result["status"], "dry_run")
-        self.assertFalse(result["released"])
-        self.assertIsNone(result.get("attestation_tx_hash"))
+        self.assertEqual(result["escrow_uid"], "0xfake-escrow-uid")
 
-    async def _check_conditions(self, baseline: int, current: int) -> bool:
-        return await self.agent.check_escrow_conditions(
-            "test-project-123",
-            {"baseline_users": baseline, "user_count": current},
+    async def _arbitrate(self) -> dict:
+        return await self.agent.arbitrate(escrow_uid="0xfake-escrow-uid")
+
+    def test_arbitrate_returns_dry_run_result(self) -> None:
+        """arbitrate in dry-run returns expected structure."""
+        asyncio.run(self._init_agent())
+        result = asyncio.run(self._arbitrate())
+
+        self.assertEqual(result["status"], "dry_run")
+        self.assertEqual(result["escrow_uid"], "0xfake-escrow-uid")
+
+    async def _collect_funds(self) -> dict:
+        return await self.agent.collect_funds(
+            escrow_uid="0xfake-escrow-uid",
+            fulfillment_uid="0xfake-fulfillment-uid",
         )
 
-    def test_check_escrow_conditions_met_when_growth_above_target(self) -> None:
-        """When growth % >= ESCROW_GROWTH_TARGET (default 30%), conditions are met."""
+    def test_collect_funds_returns_dry_run_result(self) -> None:
+        """collect_funds in dry-run returns expected structure."""
         asyncio.run(self._init_agent())
-        # 1000 -> 1300 = 30% growth
-        self.assertTrue(asyncio.run(self._check_conditions(1000, 1300)))
-        # 1000 -> 1400 = 40% growth
-        self.assertTrue(asyncio.run(self._check_conditions(1000, 1400)))
+        result = asyncio.run(self._collect_funds())
 
-    def test_check_escrow_conditions_not_met_when_growth_below_target(self) -> None:
-        """When growth % < target, conditions are not met."""
+        self.assertEqual(result["status"], "dry_run")
+        self.assertEqual(result["escrow_uid"], "0xfake-escrow-uid")
+
+    async def _get_escrow_status(self) -> dict:
+        return await self.agent.get_escrow_status(escrow_uid="0xfake-escrow-uid")
+
+    def test_get_escrow_status_returns_dry_run_result(self) -> None:
+        """get_escrow_status in dry-run returns expected structure."""
         asyncio.run(self._init_agent())
-        # 1000 -> 1200 = 20% growth (target 30%)
-        self.assertFalse(asyncio.run(self._check_conditions(1000, 1200)))
+        result = asyncio.run(self._get_escrow_status())
 
-    def test_check_escrow_conditions_no_baseline_returns_false(self) -> None:
-        """When baseline_users is 0 or missing, returns False."""
-        asyncio.run(self._init_agent())
+        self.assertEqual(result["status"], "dry_run")
+        self.assertEqual(result["escrow_uid"], "0xfake-escrow-uid")
 
-        async def run():
-            return await self.agent.check_escrow_conditions(
-                "test-project-123",
-                {"user_count": 1000},
-            )
+    def test_parse_uid_from_output_extracts_hex(self) -> None:
+        """_parse_uid_from_output should extract 0x hex UIDs."""
+        uid = self.agent._parse_uid_from_output(
+            "Escrow created: 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        )
+        self.assertTrue(uid.startswith("0x"))
+        self.assertGreater(len(uid), 10)
 
-        self.assertFalse(asyncio.run(run()))
+    def test_parse_uid_from_output_returns_full_when_no_hex(self) -> None:
+        """When no 0x UID found, returns full output."""
+        output = "Some output without hex"
+        result = self.agent._parse_uid_from_output(output)
+        self.assertEqual(result, output)
 
 
 if __name__ == "__main__":
