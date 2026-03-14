@@ -15,6 +15,7 @@ interface Project {
   funding_amount?: number;
   created_at?: string;
   stage?: string;
+  recipient_wallet?: string;
 }
 
 const STATUS_STEPS = ["submitted", "processing", "ranked", "funded"] as const;
@@ -302,6 +303,12 @@ export default function StatusPage() {
                         }}
                       >
                         AI Score: {project.ranking_score}/100
+                      </span>
+                    )}
+
+                    {project.recipient_wallet && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]" title={project.recipient_wallet}>
+                        💳 {project.recipient_wallet.slice(0, 6)}...{project.recipient_wallet.slice(-4)}
                       </span>
                     )}
 

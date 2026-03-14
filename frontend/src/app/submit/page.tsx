@@ -11,6 +11,7 @@ export default function SubmitPage() {
     description: "",
     category: "Other",
     github_url: "",
+    recipient_wallet: "",
     team_size: "",
     stage: "MVP",
     funding_amount: "",
@@ -58,6 +59,7 @@ export default function SubmitPage() {
         description: formData.description,
         category: categoryToApi[formData.category] ?? "other",
         github_url: formData.github_url || undefined,
+        recipient_wallet: formData.recipient_wallet || undefined,
         team_size: formData.team_size ? Number(formData.team_size) : undefined,
         stage: stageToApi[formData.stage] ?? "mvp",
         requested_funding: formData.funding_amount
@@ -80,6 +82,7 @@ export default function SubmitPage() {
         description: "",
         category: "Other",
         github_url: "",
+        recipient_wallet: "",
         team_size: "",
         stage: "MVP",
         funding_amount: "",
@@ -288,6 +291,26 @@ export default function SubmitPage() {
                 className="input-dark"
                 placeholder="https://github.com/user/repo"
               />
+            </div>
+
+            {/* Wallet Address */}
+            <div>
+              <label htmlFor="recipient_wallet" className={labelClass}>
+                Wallet Address (EVM){" "}
+                <span className="text-[var(--text-muted)] font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                id="recipient_wallet"
+                name="recipient_wallet"
+                value={formData.recipient_wallet}
+                onChange={handleChange}
+                className="input-dark"
+                placeholder="0x..."
+              />
+              <p className="text-xs text-[var(--text-muted)] mt-1.5">
+                Your Base Sepolia wallet address for receiving funds (0x...)
+              </p>
             </div>
 
             {/* Team Size + Stage side by side */}
