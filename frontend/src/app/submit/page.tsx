@@ -36,10 +36,31 @@ export default function SubmitPage() {
     try {
       const apiUrl =
         process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      // Map form fields to API schema: short_description, category (lowercase enum), stage (lowercase enum), requested_funding
+      const categoryToApi: Record<string, string> = {
+        DeFi: "defi",
+        Infrastructure: "infrastructure",
+        "Developer Tools": "developer_tools",
+        Consumer: "consumer",
+        Other: "other",
+      };
+      const stageToApi: Record<string, string> = {
+        Idea: "idea",
+        MVP: "mvp",
+        Beta: "beta",
+        Live: "live",
+        Scaling: "scaling",
+      };
       const payload = {
-        ...formData,
+        name: formData.name,
+        website_url: formData.website_url,
+        short_description: formData.tagline,
+        description: formData.description,
+        category: categoryToApi[formData.category] ?? "other",
+        github_url: formData.github_url || undefined,
         team_size: formData.team_size ? Number(formData.team_size) : undefined,
-        funding_amount: formData.funding_amount
+        stage: stageToApi[formData.stage] ?? "mvp",
+        requested_funding: formData.funding_amount
           ? Number(formData.funding_amount)
           : undefined,
       };
