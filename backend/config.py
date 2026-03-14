@@ -6,6 +6,10 @@ class Settings(BaseSettings):
     DATABASE_NAME: str = "agentic_funding"
     UNBROWSE_API_KEY: str = ""
     ARKHAI_API_KEY: str = ""
+    TREASURY_TOTAL_CAPITAL: float = 1_000_000
+    TREASURY_HOT_RESERVE_RATIO: float = 0.15
+    TREASURY_STRATEGIC_BUFFER_RATIO: float = 0.1
+    TREASURY_HOT_WINDOW_DAYS: int = 30
 
     # Alkahest / On-Chain Payment Config (Base Sepolia)
     ORACLE_PRIVATE_KEY: str = ""
