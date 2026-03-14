@@ -30,6 +30,20 @@ class ProjectStatus(str, Enum):
     rejected = "rejected"
 
 
+class EscrowInfo(BaseModel):
+    """Escrow details for a funded project."""
+    escrow_attestation_uid: str | None = None
+    escrowed_amount: float | None = None
+    direct_tx_hash: str | None = None
+    escrow_tx_hash: str | None = None
+    arbiter_address: str | None = None
+    status: str = "pending"  # pending, active, released, failed
+    baseline_users: int = 0
+    created_at: str | None = None
+    released_at: str | None = None
+    release_tx_hash: str | None = None
+
+
 class ProjectCreate(BaseModel):
     """Schema for creating a new project submission."""
     name: str
@@ -41,6 +55,7 @@ class ProjectCreate(BaseModel):
     team_size: Optional[int] = None
     stage: ProjectStage
     requested_funding: Optional[float] = None
+    recipient_wallet: Optional[str] = None
 
 
 class ProjectUpdate(BaseModel):
@@ -67,6 +82,7 @@ class ProjectInDB(ProjectCreate):
     ranking_score: Optional[float] = None
     funding_amount: Optional[float] = None
     enriched_data: Optional[dict[str, Any]] = None
+    escrow_info: Optional[EscrowInfo] = None
     created_at: datetime
     updated_at: datetime
 

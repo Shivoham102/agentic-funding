@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from database import connect_db, close_db
 from routes.projects import router as projects_router
+from routes.payments import router as payments_router
 
 
 @asynccontextmanager
@@ -27,6 +28,7 @@ app.add_middleware(
 )
 
 app.include_router(projects_router)
+app.include_router(payments_router)
 
 
 @app.get("/")
