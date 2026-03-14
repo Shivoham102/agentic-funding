@@ -4,7 +4,7 @@ export default function Home() {
   return (
     <div className="flex flex-col items-center">
       {/* ===== HERO SECTION ===== */}
-      <section className="relative w-full min-h-screen flex items-center justify-center overflow-hidden pt-24">
+      <section className="relative w-full min-h-screen flex items-center justify-center overflow-hidden pt-28">
         {/* Floating orbs */}
         <div className="orb w-[500px] h-[500px] bg-[var(--violet)] -top-40 -left-40" />
         <div className="orb w-[400px] h-[400px] bg-[var(--blue)] -bottom-32 -right-32" />
@@ -188,7 +188,7 @@ export default function Home() {
       {/* ===== CTA BANNER ===== */}
       <section className="relative w-full py-24 md:py-32 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
-          <div className="glass-card p-12 md:p-16 text-center relative overflow-hidden" style={{ borderImage: 'linear-gradient(135deg, var(--violet), var(--blue)) 1' }}>
+          <div className="glass-card-gradient p-12 md:p-16 text-center relative overflow-hidden">
             {/* Subtle orb inside card */}
             <div className="orb w-[300px] h-[300px] bg-[var(--violet)] -top-20 -right-20" />
             <div className="orb w-[200px] h-[200px] bg-[var(--blue)] -bottom-16 -left-16" />

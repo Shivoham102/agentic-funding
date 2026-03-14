@@ -72,11 +72,11 @@ function StatusTimeline({ status }: { status: string }) {
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 transition-all ${
                   isCompleted
                     ? "text-white"
-                    : "border border-[rgba(255,255,255,0.15)] text-[#71717A] bg-transparent"
+                    : "border border-[var(--border-hover)] text-[var(--text-muted)] bg-transparent"
                 }${isCurrent ? " shadow-[0_0_12px_rgba(139,92,246,0.5)]" : ""}`}
                 style={
                   isCompleted
-                    ? { background: "linear-gradient(135deg, #8B5CF6, #3B82F6)" }
+                    ? { background: "linear-gradient(135deg, var(--violet), var(--blue))" }
                     : undefined
                 }
               >
@@ -90,7 +90,7 @@ function StatusTimeline({ status }: { status: string }) {
               </div>
               <span
                 className={`text-[10px] mt-1.5 whitespace-nowrap ${
-                  isCompleted ? "text-[#A1A1AA]" : "text-[#71717A]"
+                  isCompleted ? "text-[var(--text-secondary)]" : "text-[var(--text-muted)]"
                 }`}
               >
                 {STATUS_LABELS[step]}
@@ -103,8 +103,8 @@ function StatusTimeline({ status }: { status: string }) {
                   className="h-0.5 w-full rounded-full mb-5"
                   style={
                     i < currentIndex
-                      ? { background: "linear-gradient(90deg, #8B5CF6, #3B82F6)" }
-                      : { background: "rgba(255,255,255,0.1)" }
+                      ? { background: "linear-gradient(90deg, var(--violet), var(--blue))" }
+                      : { background: "var(--border)" }
                   }
                 />
               </div>
@@ -164,7 +164,7 @@ export default function StatusPage() {
           <h1 className="text-3xl sm:text-4xl font-bold gradient-text mb-3">
             Check Your Project Status
           </h1>
-          <p className="text-[#71717A]">
+          <p className="text-[var(--text-muted)]">
             Enter your project name or website URL to check the status of your
             application
           </p>
@@ -199,7 +199,7 @@ export default function StatusPage() {
               background: "rgba(239, 68, 68, 0.05)",
             }}
           >
-            <p className="text-sm text-[#EF4444]">{error}</p>
+            <p className="text-sm text-[var(--error)]">{error}</p>
           </div>
         )}
 
@@ -209,9 +209,9 @@ export default function StatusPage() {
             {[1, 2].map((i) => (
               <div key={i} className="glass-card p-6">
                 <div className="animate-pulse space-y-3">
-                  <div className="h-5 bg-[rgba(255,255,255,0.06)] rounded w-1/3" />
-                  <div className="h-3 bg-[rgba(255,255,255,0.04)] rounded w-1/2" />
-                  <div className="h-8 bg-[rgba(255,255,255,0.04)] rounded w-full mt-4" />
+                  <div className="h-5 bg-[var(--surface-hover)] rounded w-1/3" />
+                  <div className="h-3 bg-[var(--surface)] rounded w-1/2" />
+                  <div className="h-8 bg-[var(--surface)] rounded w-full mt-4" />
                 </div>
               </div>
             ))}
@@ -224,9 +224,9 @@ export default function StatusPage() {
             {results.length === 0 ? (
               <div className="glass-card p-8 sm:p-12 text-center">
                 {/* Not Found Icon */}
-                <div className="mx-auto mb-4 w-12 h-12 rounded-full flex items-center justify-center border border-[rgba(255,255,255,0.1)]">
+                <div className="mx-auto mb-4 w-12 h-12 rounded-full flex items-center justify-center border border-[var(--border)]">
                   <svg
-                    className="w-6 h-6 text-[#71717A]"
+                    className="w-6 h-6 text-[var(--text-muted)]"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -242,7 +242,7 @@ export default function StatusPage() {
                 <h3 className="text-lg font-semibold text-white mb-2">
                   No projects found matching your search
                 </h3>
-                <p className="text-sm text-[#71717A] mb-6">
+                <p className="text-sm text-[var(--text-muted)] mb-6">
                   Double-check the spelling or try a different search term.
                 </p>
                 <Link
@@ -266,13 +266,13 @@ export default function StatusPage() {
                           href={project.website_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-[#71717A] hover:text-[#8B5CF6] transition-colors mt-1 inline-block"
+                          className="text-xs text-[var(--text-muted)] hover:text-[var(--violet)] transition-colors mt-1 inline-block"
                         >
                           {project.website_url}
                         </a>
                       )}
                     </div>
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[#A1A1AA]">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]">
                       {project.category}
                     </span>
                   </div>
@@ -283,10 +283,10 @@ export default function StatusPage() {
                   </div>
 
                   {/* Metrics */}
-                  <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-[rgba(255,255,255,0.06)]">
+                  <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-[var(--border)]">
                     {project.status === "funded" && project.funding_amount && (
                       <div>
-                        <p className="text-xs text-[#71717A] mb-0.5">Funded</p>
+                        <p className="text-xs text-[var(--text-muted)] mb-0.5">Funded</p>
                         <p className="text-lg font-bold gradient-text">
                           ${project.funding_amount.toLocaleString()}
                         </p>
@@ -306,7 +306,7 @@ export default function StatusPage() {
                     )}
 
                     {project.created_at && (
-                      <span className="text-xs text-[#71717A] ml-auto">
+                      <span className="text-xs text-[var(--text-muted)] ml-auto">
                         Applied {formatDate(project.created_at)}
                       </span>
                     )}

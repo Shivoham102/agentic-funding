@@ -39,7 +39,7 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
-            <Link href="/submit" className="btn-gradient text-sm !py-2 !px-5">
+            <Link href="/submit" className="btn-gradient-sm">
               Get Funded
             </Link>
           </div>
@@ -75,7 +75,7 @@ export default function Navbar() {
             ))}
             <Link
               href="/submit"
-              className="btn-gradient text-sm text-center !py-2"
+              className="btn-gradient-sm text-center"
               onClick={() => setMobileOpen(false)}
             >
               Get Funded

@@ -23,28 +23,28 @@ function StatusBadge({ status }: { status: string }) {
   switch (status) {
     case "funded":
       bg = "rgba(34,197,94,0.15)";
-      text = "#22C55E";
+      text = "var(--success)";
       break;
     case "ranked":
       bg = "rgba(139,92,246,0.15)";
-      text = "#A78BFA";
+      text = "var(--violet)";
       break;
     case "reviewed":
       bg = "rgba(59,130,246,0.15)";
-      text = "#60A5FA";
+      text = "var(--blue)";
       break;
     case "processing":
     case "under_review":
       bg = "rgba(234,179,8,0.15)";
-      text = "#EAB308";
+      text = "var(--warning)";
       break;
     case "rejected":
       bg = "rgba(239,68,68,0.15)";
-      text = "#EF4444";
+      text = "var(--error)";
       break;
     default:
-      bg = "rgba(255,255,255,0.06)";
-      text = "#A1A1AA";
+      bg = "var(--surface-hover)";
+      text = "var(--text-secondary)";
       break;
   }
 
@@ -60,7 +60,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function StageBadge({ stage }: { stage: string }) {
   return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[#A1A1AA] whitespace-nowrap">
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] whitespace-nowrap">
       {stage}
     </span>
   );
@@ -73,14 +73,14 @@ function SkeletonCards() {
         <div key={i} className="glass-card p-5 sm:p-6">
           <div className="animate-pulse">
             <div className="flex items-center justify-between mb-3">
-              <div className="h-5 bg-[rgba(255,255,255,0.06)] rounded w-1/3" />
-              <div className="h-5 bg-[rgba(255,255,255,0.04)] rounded-full w-20" />
+              <div className="h-5 bg-[var(--surface-hover)] rounded w-1/3" />
+              <div className="h-5 bg-[var(--surface)] rounded-full w-20" />
             </div>
-            <div className="h-3 bg-[rgba(255,255,255,0.04)] rounded w-2/3 mb-2" />
-            <div className="h-3 bg-[rgba(255,255,255,0.03)] rounded w-1/4 mb-4" />
-            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[rgba(255,255,255,0.04)]">
-              <div className="h-5 bg-[rgba(255,255,255,0.04)] rounded-full w-16" />
-              <div className="h-5 bg-[rgba(255,255,255,0.04)] rounded-full w-14" />
+            <div className="h-3 bg-[var(--surface)] rounded w-2/3 mb-2" />
+            <div className="h-3 bg-[var(--surface)] rounded w-1/4 mb-4" />
+            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[var(--border)]">
+              <div className="h-5 bg-[var(--surface)] rounded-full w-16" />
+              <div className="h-5 bg-[var(--surface)] rounded-full w-14" />
             </div>
           </div>
         </div>
@@ -122,7 +122,7 @@ export default function DashboardPage() {
           <h1 className="text-3xl sm:text-4xl font-bold gradient-text mb-3">
             All Projects
           </h1>
-          <p className="text-[#71717A]">
+          <p className="text-[var(--text-muted)]">
             Browse all submitted projects and their funding status
           </p>
         </div>
@@ -141,7 +141,7 @@ export default function DashboardPage() {
           >
             <div className="mx-auto mb-4 w-12 h-12 rounded-full flex items-center justify-center border border-[rgba(239,68,68,0.2)]">
               <svg
-                className="w-6 h-6 text-[#EF4444]"
+                className="w-6 h-6 text-[var(--error)]"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -157,10 +157,10 @@ export default function DashboardPage() {
             <h3 className="text-lg font-semibold text-white mb-2">
               Unable to Load Projects
             </h3>
-            <p className="text-sm text-[#71717A] mb-1">
+            <p className="text-sm text-[var(--text-muted)] mb-1">
               Could not connect to the API.
             </p>
-            <p className="text-xs text-[#71717A]">
+            <p className="text-xs text-[var(--text-muted)]">
               Make sure the backend is running at{" "}
               {process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}
             </p>
@@ -170,9 +170,9 @@ export default function DashboardPage() {
         {/* Empty State */}
         {!loading && !error && projects.length === 0 && (
           <div className="glass-card p-8 sm:p-12 text-center animate-fade-in">
-            <div className="mx-auto mb-4 w-12 h-12 rounded-full flex items-center justify-center border border-[rgba(255,255,255,0.1)]">
+            <div className="mx-auto mb-4 w-12 h-12 rounded-full flex items-center justify-center border border-[var(--border)]">
               <svg
-                className="w-6 h-6 text-[#71717A]"
+                className="w-6 h-6 text-[var(--text-muted)]"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -188,7 +188,7 @@ export default function DashboardPage() {
             <h3 className="text-lg font-semibold text-white mb-2">
               No projects yet
             </h3>
-            <p className="text-sm text-[#71717A] mb-6">
+            <p className="text-sm text-[var(--text-muted)] mb-6">
               Be the first to apply for funding and get your project reviewed by
               our AI agents.
             </p>
@@ -216,7 +216,7 @@ export default function DashboardPage() {
 
                 {/* Tagline */}
                 {project.tagline && (
-                  <p className="text-sm text-[#A1A1AA] mb-1.5 line-clamp-1">
+                  <p className="text-sm text-[var(--text-secondary)] mb-1.5 line-clamp-1">
                     {project.tagline}
                   </p>
                 )}
@@ -226,14 +226,14 @@ export default function DashboardPage() {
                   href={project.website_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-[#8B5CF6] hover:text-[#A78BFA] transition-colors inline-block mb-3"
+                  className="text-xs text-[var(--violet)] hover:text-[var(--violet)] transition-colors inline-block mb-3"
                 >
                   {project.website_url}
                 </a>
 
                 {/* Bottom row: badges + score */}
-                <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-[rgba(255,255,255,0.06)]">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[#A1A1AA]">
+                <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-[var(--border)]">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]">
                     {project.category}
                   </span>
                   {project.stage && <StageBadge stage={project.stage} />}

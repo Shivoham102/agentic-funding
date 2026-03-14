@@ -82,7 +82,7 @@ export default function SubmitPage() {
           <div className="glass-card p-8 sm:p-12 text-center animate-fade-in">
             {/* Checkmark Icon */}
             <div className="mx-auto mb-6 w-16 h-16 rounded-full flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg, #8B5CF6, #3B82F6)" }}>
+              style={{ background: "linear-gradient(135deg, var(--violet), var(--blue))" }}>
               <svg
                 className="w-8 h-8 text-white"
                 fill="none"
@@ -101,7 +101,7 @@ export default function SubmitPage() {
             <h1 className="text-2xl sm:text-3xl font-bold mb-3 gradient-text">
               Application Submitted!
             </h1>
-            <p className="text-[#A1A1AA] mb-8 max-w-md mx-auto">
+            <p className="text-[var(--text-secondary)] mb-8 max-w-md mx-auto">
               Our AI agents will review your project shortly. You can track your
               application status at any time.
             </p>
@@ -124,7 +124,7 @@ export default function SubmitPage() {
   }
 
   const labelClass =
-    "text-sm font-medium text-[#A1A1AA] mb-2 block";
+    "text-sm font-medium text-[var(--text-secondary)] mb-2 block";
 
   return (
     <div className="pt-28 pb-20">
@@ -135,7 +135,7 @@ export default function SubmitPage() {
           <h1 className="text-3xl sm:text-4xl font-bold gradient-text mb-3">
             Apply for Funding
           </h1>
-          <p className="text-[#71717A]">
+          <p className="text-[var(--text-muted)]">
             Tell us about your project. Our AI agents will review your
             application automatically.
           </p>
@@ -150,7 +150,7 @@ export default function SubmitPage() {
               background: "rgba(239, 68, 68, 0.05)",
             }}
           >
-            <p className="text-sm text-[#EF4444]">{error}</p>
+            <p className="text-sm text-[var(--error)]">{error}</p>
           </div>
         )}
 
@@ -160,7 +160,7 @@ export default function SubmitPage() {
             {/* Project Name */}
             <div>
               <label htmlFor="name" className={labelClass}>
-                Project Name <span className="text-[#8B5CF6]">*</span>
+                Project Name <span className="text-[var(--violet)]">*</span>
               </label>
               <input
                 type="text"
@@ -177,7 +177,7 @@ export default function SubmitPage() {
             {/* Project Website */}
             <div>
               <label htmlFor="website_url" className={labelClass}>
-                Project Website <span className="text-[#8B5CF6]">*</span>
+                Project Website <span className="text-[var(--violet)]">*</span>
               </label>
               <input
                 type="url"
@@ -189,7 +189,7 @@ export default function SubmitPage() {
                 className="input-dark"
                 placeholder="https://myproject.com"
               />
-              <p className="text-xs text-[#71717A] mt-1.5">
+              <p className="text-xs text-[var(--text-muted)] mt-1.5">
                 We&apos;ll analyze your site automatically using AI
               </p>
             </div>
@@ -197,7 +197,7 @@ export default function SubmitPage() {
             {/* Tagline */}
             <div>
               <label htmlFor="tagline" className={labelClass}>
-                One-line Description <span className="text-[#8B5CF6]">*</span>
+                One-line Description <span className="text-[var(--violet)]">*</span>
               </label>
               <input
                 type="text"
@@ -210,7 +210,7 @@ export default function SubmitPage() {
                 className="input-dark"
                 placeholder="A short tagline for your project"
               />
-              <p className="text-xs text-[#71717A] mt-1.5">
+              <p className="text-xs text-[var(--text-muted)] mt-1.5">
                 {formData.tagline.length}/140 characters
               </p>
             </div>
@@ -218,7 +218,7 @@ export default function SubmitPage() {
             {/* Detailed Description */}
             <div>
               <label htmlFor="description" className={labelClass}>
-                Detailed Description <span className="text-[#8B5CF6]">*</span>
+                Detailed Description <span className="text-[var(--violet)]">*</span>
               </label>
               <textarea
                 id="description"
@@ -256,7 +256,7 @@ export default function SubmitPage() {
             <div>
               <label htmlFor="github_url" className={labelClass}>
                 GitHub Repository URL{" "}
-                <span className="text-[#71717A] font-normal">(optional)</span>
+                <span className="text-[var(--text-muted)] font-normal">(optional)</span>
               </label>
               <input
                 type="url"
@@ -274,7 +274,7 @@ export default function SubmitPage() {
               <div>
                 <label htmlFor="team_size" className={labelClass}>
                   Team Size{" "}
-                  <span className="text-[#71717A] font-normal">(optional)</span>
+                  <span className="text-[var(--text-muted)] font-normal">(optional)</span>
                 </label>
                 <input
                   type="number"
@@ -312,7 +312,7 @@ export default function SubmitPage() {
             <div>
               <label htmlFor="funding_amount" className={labelClass}>
                 Requested Funding Amount (USD){" "}
-                <span className="text-[#71717A] font-normal">(optional)</span>
+                <span className="text-[var(--text-muted)] font-normal">(optional)</span>
               </label>
               <input
                 type="number"

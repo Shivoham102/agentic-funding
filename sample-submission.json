@@ -1,0 +1,11 @@
+{
+  "name": "SolanaFlow",
+  "website_url": "https://solanaflow.io",
+  "short_description": "Real-time Solana transaction analytics and alerts for DeFi traders",
+  "description": "SolanaFlow provides real-time transaction monitoring, whale tracking, and smart alerts for Solana DeFi protocols. Traders can set up custom dashboards to track token flows, liquidity changes, and large swaps across Raydium, Jupiter, and Orca. We process over 2M transactions per day and serve 5,000+ active users. Our goal is to become the go-to analytics layer for the Solana ecosystem, expanding into portfolio tracking and automated trading signals.",
+  "category": "DeFi",
+  "github_url": "https://github.com/solanaflow/core",
+  "team_size": 4,
+  "stage": "Beta",
+  "requested_funding": 75000
+}
