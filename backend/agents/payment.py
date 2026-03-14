@@ -3,11 +3,19 @@ from typing import Any
 from datetime import datetime, timezone
 
 from eth_abi import encode
-from alkahest_py import AlkahestClient
 
 from config import Settings
 
 logger = logging.getLogger(__name__)
+
+# Lazy import: alkahest-py may not export AlkahestClient in all versions; app still starts without it.
+def _get_alkahest_client():
+    try:
+        from alkahest_py import AlkahestClient
+        return AlkahestClient
+    except (ImportError, AttributeError) as e:
+        logger.debug("AlkahestClient not available: %s", e)
+        return None
 
 
 class PaymentAgent:
@@ -22,13 +30,18 @@ class PaymentAgent:
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.client: AlkahestClient | None = None
+        self.client: Any = None
         self._initialized = False
 
     async def initialize(self) -> None:
         """Initialize the Alkahest client. Call once before using other methods."""
         if not self.settings.ORACLE_PRIVATE_KEY:
             logger.warning("ORACLE_PRIVATE_KEY not set - payment agent running in dry-run mode")
+            return
+
+        AlkahestClient = _get_alkahest_client()
+        if AlkahestClient is None:
+            logger.warning("AlkahestClient not available - payment agent running in dry-run mode")
             return
 
         try:
@@ -121,9 +134,11 @@ class PaymentAgent:
         # Extract attestation UID from escrow receipt
         escrow_attestation_uid = None
         try:
-            receipt = escrow_tx_hash  # The SDK may return receipt directly
-            attested_event = AlkahestClient.get_attested_event(receipt)
-            escrow_attestation_uid = str(attested_event.data.uid)
+            AlkahestClientCls = _get_alkahest_client()
+            if AlkahestClientCls:
+                receipt = escrow_tx_hash  # The SDK may return receipt directly
+                attested_event = AlkahestClientCls.get_attested_event(receipt)
+                escrow_attestation_uid = str(attested_event.data.uid)
         except Exception as e:
             logger.warning(f"Could not extract escrow attestation UID: {e}")
 
