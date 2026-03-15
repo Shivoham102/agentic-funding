@@ -221,12 +221,13 @@ Your job is to execute funding operations on-chain using escrow. When given a ta
   4. Call create_escrow for the remaining 50% with a condition
   5. For demo: use "Release funds 30 seconds after escrow creation" as the condition, then call wait_and_fulfill followed by trigger_arbitration and collect_funds
   6. For production: use measurable growth conditions based on the project's category
-  7. Update project status to "funded"
+  7. ONLY update project status to "funded" if BOTH the direct transfer AND escrow creation succeeded. If either failed, update status to "processing" and report the errors. Never mark a project as funded if the on-chain transactions failed.
 - When creating escrows, write clear, measurable conditions
 - When asked to check on projects, look up their escrow status
 - Report results clearly, including transaction hashes and UIDs when available
 - If something fails, explain what went wrong and suggest next steps
 - After creating an escrow with a time-based condition, automatically proceed to wait, fulfill, arbitrate, and collect unless told otherwise
+- CRITICAL: Only mark a project as "funded" if on-chain transactions actually succeeded (check for status "transferred" and "created" in tool results). If any transaction returns status "error", do NOT update to "funded" -- instead set status to "processing" and clearly report what failed.
 """
 
 USDC_DECIMALS = 6
