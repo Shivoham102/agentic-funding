@@ -1,0 +1,23 @@
+{
+  "proposal_id": "prop_weak",
+  "name": "RollupRadar",
+  "website_url": "https://rollupradar.example",
+  "github_url": "https://github.com/rollupradar/app",
+  "description": "RollupRadar wants to build an alerting dashboard for every chain without a differentiated data pipeline.",
+  "category": "developer_tools",
+  "stage": "idea",
+  "team_size": 1,
+  "requested_funding_usd": 260000,
+  "recipient_wallet": "3rV2Lq9mS4u7i4jW7wM1h1jD7Lq9vZpZ1p4x9h7M2Abc",
+  "team_background": "Solo founder.",
+  "market_summary": "Many teams need dashboards.",
+  "traction_summary": "",
+  "budget_breakdown": [
+    { "category": "engineering", "amount_usd": 25000, "notes": "Initial build." },
+    { "category": "misc", "amount_usd": 15000, "notes": "General costs." }
+  ],
+  "requested_milestones": [
+    { "name": "Design", "description": "Create wireframes.", "target_days": 21, "requested_release_ratio": 0.5 },
+    { "name": "Build", "description": "Build MVP.", "target_days": 60, "requested_release_ratio": 0.5 }
+  ]
+}

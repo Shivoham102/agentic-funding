@@ -1,0 +1,13 @@
+{
+  "schema_version": "funding-package-v1",
+  "proposal_id": "prop_weak",
+  "recommendation_label": "reject",
+  "requested_amount_usd": 260000,
+  "recommended_amount_usd": 0,
+  "treasury_capacity_usd": 120000,
+  "rationale_codes": [
+    "FUNDING_NOT_RECOMMENDED",
+    "TREASURY_CAPACITY_CONSTRAINED"
+  ],
+  "milestones": []
+}

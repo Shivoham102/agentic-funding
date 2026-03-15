@@ -29,12 +29,50 @@ class FeatureExtractionAgent:
         self.cli_timeout_seconds = cli_timeout_seconds
 
     def extract_features(self, project: dict[str, Any]) -> dict[str, Any]:
-        self._ensure_runtime()
-        payload = {
-            "proposal": self._proposal_payload(project),
-            "evidence": self._evidence_payload(project),
+        parsed = self._run_cli(
+            {
+                "proposal": self._proposal_payload(project),
+                "evidence": self._evidence_payload(project),
+            }
+        )
+        features = parsed.get("features")
+        if not isinstance(features, dict):
+            raise RuntimeError("Feature extraction did not return a feature vector.")
+        return features
+
+    def run_scoring_review(
+        self,
+        project: dict[str, Any],
+        treasury_snapshot: dict[str, Any],
+        owner_prefs: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        parsed = self._run_cli(
+            {
+                "proposal": self._proposal_payload(project),
+                "evidence": self._evidence_payload(project),
+                "ownerPrefs": owner_prefs or {},
+                "treasurySnapshot": self._treasury_snapshot_payload(treasury_snapshot),
+            }
+        )
+        features = parsed.get("features")
+        scorecard = parsed.get("scorecard")
+        funding_package_draft = parsed.get("fundingPackageDraft")
+
+        if not isinstance(features, dict):
+            raise RuntimeError("Scoring review did not return a feature vector.")
+        if not isinstance(scorecard, dict):
+            raise RuntimeError("Scoring review did not return a scorecard.")
+        if not isinstance(funding_package_draft, dict):
+            raise RuntimeError("Scoring review did not return a funding package draft.")
+
+        return {
+            "features": features,
+            "scorecard": scorecard,
+            "funding_package_draft": funding_package_draft,
         }
 
+    def _run_cli(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._ensure_runtime()
         result = subprocess.run(
             [self.node_executable, str(self.dist_cli)],
             input=json.dumps(payload, default=self._json_default),
@@ -58,10 +96,7 @@ class FeatureExtractionAgent:
         if isinstance(validation, dict) and not validation.get("ok", False):
             raise RuntimeError(f"Feature validation failed: {validation.get('errors')}")
 
-        features = parsed.get("features")
-        if not isinstance(features, dict):
-            raise RuntimeError("Feature extraction did not return a feature vector.")
-        return features
+        return parsed
 
     def _ensure_runtime(self) -> None:
         if not self.dist_cli.exists() or self._is_dist_stale():
@@ -117,6 +152,17 @@ class FeatureExtractionAgent:
         evidence_bundle = enriched_data.get("evidence_bundle")
         return evidence_bundle if isinstance(evidence_bundle, dict) else {}
 
+    def _treasury_snapshot_payload(self, treasury_snapshot: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "hot_reserve_usd": self._to_float(treasury_snapshot.get("hot_reserve")),
+            "committed_reserve_usd": self._to_float(treasury_snapshot.get("committed_reserve")),
+            "idle_treasury_usd": self._to_float(treasury_snapshot.get("idle_treasury")),
+            "strategic_buffer_usd": self._to_float(treasury_snapshot.get("strategic_buffer")),
+            "available_for_new_commitments_usd": self._to_float(
+                treasury_snapshot.get("available_for_new_commitments")
+            ),
+        }
+
     def _enum_value(self, value: Any) -> Any:
         if isinstance(value, Enum):
             return value.value
@@ -126,6 +172,14 @@ class FeatureExtractionAgent:
         if isinstance(value, ObjectId):
             return str(value)
         return str(value).strip() if value is not None else ""
+
+    def _to_float(self, value: Any) -> float:
+        if value is None:
+            return 0.0
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
 
     def _json_default(self, value: Any) -> Any:
         if isinstance(value, datetime):

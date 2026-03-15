@@ -1,0 +1,122 @@
+{
+  "schema_version": "scorecard-v1",
+  "proposal_id": "prop_weak",
+  "subscores": {
+    "team_quality": 19.32,
+    "market_opportunity": 35.31,
+    "product_feasibility": 29.24,
+    "capital_efficiency": 20,
+    "traction_signals": 18.03,
+    "risk_indicators": 82.69
+  },
+  "dimension_reason_codes": {
+    "team_quality": [
+      "TEAM_BACKGROUND_SHALLOW",
+      "TEAM_EVIDENCE_THIN",
+      "TEAM_QUALITY_WEAK",
+      "TEAM_SIZE_THIN"
+    ],
+    "market_opportunity": [
+      "DEMAND_SIGNAL_WEAK",
+      "MARKET_OPPORTUNITY_WEAK"
+    ],
+    "product_feasibility": [
+      "DOCS_QUALITY_WEAK",
+      "PRODUCT_FEASIBILITY_WEAK",
+      "REPO_ACTIVITY_LIGHT"
+    ],
+    "capital_efficiency": [
+      "BUDGET_COVERAGE_THIN",
+      "CAPITAL_EFFICIENCY_WEAK",
+      "CAPITAL_INTENSITY_HIGH",
+      "MILESTONE_BUDGET_HEAVY"
+    ],
+    "traction_signals": [
+      "TRACTION_WEAK"
+    ],
+    "risk_indicators": [
+      "CAPITAL_EFFICIENCY_RISK",
+      "PORTFOLIO_OVERLAP_PRESENT",
+      "RISK_PRESSURE_LOW",
+      "WALLET_FAILURES_ELEVATED"
+    ]
+  },
+  "overall_score": 30.75,
+  "confidence": 0.736,
+  "confidence_level": 0.736,
+  "risk_band": {
+    "classification": "low",
+    "score": 17.31,
+    "reason_codes": [
+      "CAPITAL_EFFICIENCY_RISK",
+      "PORTFOLIO_OVERLAP_PRESENT",
+      "RISK_PRESSURE_LOW",
+      "WALLET_FAILURES_ELEVATED"
+    ]
+  },
+  "risk_classification": "low",
+  "reason_codes": [
+    "BUDGET_COVERAGE_THIN",
+    "CAPITAL_EFFICIENCY_RISK",
+    "CAPITAL_EFFICIENCY_WEAK",
+    "CAPITAL_INTENSITY_HIGH",
+    "DEMAND_SIGNAL_WEAK",
+    "DOCS_QUALITY_WEAK",
+    "MARKET_OPPORTUNITY_WEAK",
+    "MARKET_REVIEW_NEEDED",
+    "MILESTONE_BUDGET_HEAVY",
+    "PORTFOLIO_OVERLAP_PRESENT",
+    "PRODUCT_FEASIBILITY_WEAK",
+    "PRODUCT_REVIEW_NEEDED",
+    "REPO_ACTIVITY_LIGHT",
+    "RISK_PRESSURE_LOW",
+    "TEAM_BACKGROUND_SHALLOW",
+    "TEAM_EVIDENCE_THIN",
+    "TEAM_QUALITY_WEAK",
+    "TEAM_REVIEW_NEEDED",
+    "TEAM_SIZE_THIN",
+    "TRACTION_REVIEW_NEEDED",
+    "TRACTION_WEAK",
+    "WALLET_FAILURES_ELEVATED"
+  ],
+  "owner_preferences_used": {
+    "subscore_weights": {
+      "team_quality": 0.2,
+      "market_opportunity": 0.2,
+      "product_feasibility": 0.2,
+      "capital_efficiency": 0.15,
+      "traction_signals": 0.15,
+      "risk_indicators": 0.1
+    },
+    "risk_tolerance": "balanced",
+    "minimum_confidence": 0.45,
+    "minimum_overall_score": 60,
+    "minimum_ticket_usd": 10000,
+    "target_initial_release_ratio": 0.2,
+    "default_milestone_count": 3,
+    "max_milestone_count": 4,
+    "max_single_milestone_ratio": 0.45,
+    "milestone_window_days": 35
+  },
+  "proposal_context": {
+    "proposal_id": "prop_weak",
+    "requested_amount_usd": 260000,
+    "requested_milestone_count": 2,
+    "stage": "idea",
+    "category": "developer_tools",
+    "team_size": 1,
+    "thin_evidence_categories": [
+      "team"
+    ],
+    "missing_fields_count": 1,
+    "contradiction_flag_count": 3
+  },
+  "missingness_summary": {
+    "total_missing_count": 1,
+    "missing_proposal_fields": 1,
+    "missing_evidence_fields": 0,
+    "thin_evidence_categories": [
+      "team"
+    ]
+  }
+}

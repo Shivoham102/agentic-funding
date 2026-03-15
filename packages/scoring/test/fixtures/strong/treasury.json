@@ -1,0 +1,6 @@
+{
+  "hot_reserve_usd": 150000,
+  "committed_reserve_usd": 120000,
+  "idle_treasury_usd": 480000,
+  "strategic_buffer_usd": 100000
+}

@@ -1,0 +1,26 @@
+{
+  "proposal_id": "prop_strong",
+  "name": "VectorFlow",
+  "website_url": "https://vectorflow.example",
+  "github_url": "https://github.com/vectorflow/core",
+  "description": "VectorFlow builds routing infrastructure that helps Solana teams automate on-chain treasury and payment flows with verifiable controls.",
+  "category": "infrastructure",
+  "stage": "beta",
+  "team_size": 4,
+  "requested_funding_usd": 180000,
+  "recipient_wallet": "7xQ2P2Q8pwkZ9E8fbHwNTr6zKkX9nJd9L1Qk4n1c2Abc",
+  "team_background": "The founding team previously shipped developer tooling, Solana indexers, and treasury automation systems across two funded startups and one open-source protocol.",
+  "market_summary": "The product targets treasury-heavy Solana teams, agentic finance builders, and infrastructure operators that need deterministic release controls.",
+  "traction_summary": "The startup reports active pilots, repeat design partners, and early subscription revenue.",
+  "budget_breakdown": [
+    { "category": "engineering", "amount_usd": 90000, "notes": "Core protocol and backend work." },
+    { "category": "security", "amount_usd": 25000, "notes": "Audits and hardening." },
+    { "category": "growth", "amount_usd": 30000, "notes": "Partner integrations." },
+    { "category": "operations", "amount_usd": 25000, "notes": "Infra and ops." }
+  ],
+  "requested_milestones": [
+    { "name": "Beta hardening", "description": "Ship reliability and admin workflows.", "target_days": 30, "requested_release_ratio": 0.2 },
+    { "name": "Partner launches", "description": "Launch design partners and KPI reporting.", "target_days": 70, "requested_release_ratio": 0.35 },
+    { "name": "General availability", "description": "Release public product and verification tooling.", "target_days": 110, "requested_release_ratio": 0.45 }
+  ]
+}

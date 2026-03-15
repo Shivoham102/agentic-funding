@@ -1,8 +1,10 @@
-import { extractFeatures, validateFeatures } from "./index.js";
+import { extractFeatures, recommendPackage, score, validateFeatures } from "./index.js";
 
 interface FeatureExtractionRequest {
   proposal?: unknown;
   evidence?: unknown;
+  ownerPrefs?: unknown;
+  treasurySnapshot?: unknown;
 }
 
 async function main(): Promise<void> {
@@ -11,6 +13,11 @@ async function main(): Promise<void> {
     const payload = parsePayload(input);
     const features = extractFeatures(payload.proposal ?? {}, payload.evidence ?? {});
     const validation = validateFeatures(features);
+    const scorecard = score(features, payload.ownerPrefs ?? {});
+    const fundingPackageDraft =
+      payload.treasurySnapshot !== undefined
+        ? recommendPackage(scorecard, payload.treasurySnapshot)
+        : undefined;
 
     process.stdout.write(
       JSON.stringify(
@@ -18,6 +25,8 @@ async function main(): Promise<void> {
           ok: validation.ok,
           validation,
           features,
+          scorecard,
+          fundingPackageDraft,
         },
         null,
         2,

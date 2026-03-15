@@ -1,0 +1,93 @@
+{
+  "schema_version": "scorecard-v1",
+  "proposal_id": "prop_strong",
+  "subscores": {
+    "team_quality": 67.38,
+    "market_opportunity": 80.12,
+    "product_feasibility": 79.92,
+    "capital_efficiency": 90,
+    "traction_signals": 64.68,
+    "risk_indicators": 98.55
+  },
+  "dimension_reason_codes": {
+    "team_quality": [],
+    "market_opportunity": [
+      "MARKET_GROWTH_STRONG",
+      "MARKET_OPPORTUNITY_STRONG",
+      "MARKET_SIZE_LARGE"
+    ],
+    "product_feasibility": [
+      "PRODUCT_FEASIBILITY_STRONG",
+      "PRODUCT_READINESS_STRONG"
+    ],
+    "capital_efficiency": [
+      "CAPITAL_EFFICIENCY_STRONG"
+    ],
+    "traction_signals": [
+      "ACTIVE_USAGE_OBSERVED",
+      "REVENUE_SIGNAL_PRESENT"
+    ],
+    "risk_indicators": [
+      "RISK_PRESSURE_LOW"
+    ]
+  },
+  "overall_score": 78.54,
+  "confidence": 0.965,
+  "confidence_level": 0.965,
+  "risk_band": {
+    "classification": "low",
+    "score": 1.45,
+    "reason_codes": [
+      "RISK_PRESSURE_LOW"
+    ]
+  },
+  "risk_classification": "low",
+  "reason_codes": [
+    "ACTIVE_USAGE_OBSERVED",
+    "CAPITAL_EFFICIENCY_STRONG",
+    "HIGH_CONFIDENCE_BASELINE",
+    "MARKET_GROWTH_STRONG",
+    "MARKET_OPPORTUNITY_STRONG",
+    "MARKET_SIZE_LARGE",
+    "PRODUCT_FEASIBILITY_STRONG",
+    "PRODUCT_READINESS_STRONG",
+    "REVENUE_SIGNAL_PRESENT",
+    "RISK_PRESSURE_LOW"
+  ],
+  "owner_preferences_used": {
+    "subscore_weights": {
+      "team_quality": 0.2,
+      "market_opportunity": 0.2,
+      "product_feasibility": 0.2,
+      "capital_efficiency": 0.15,
+      "traction_signals": 0.15,
+      "risk_indicators": 0.1
+    },
+    "risk_tolerance": "balanced",
+    "minimum_confidence": 0.45,
+    "minimum_overall_score": 60,
+    "minimum_ticket_usd": 10000,
+    "target_initial_release_ratio": 0.2,
+    "default_milestone_count": 3,
+    "max_milestone_count": 4,
+    "max_single_milestone_ratio": 0.45,
+    "milestone_window_days": 35
+  },
+  "proposal_context": {
+    "proposal_id": "prop_strong",
+    "requested_amount_usd": 180000,
+    "requested_milestone_count": 3,
+    "stage": "beta",
+    "category": "infrastructure",
+    "team_size": 4,
+    "thin_evidence_categories": [],
+    "missing_fields_count": 0,
+    "contradiction_flag_count": 0
+  },
+  "missingness_summary": {
+    "total_missing_count": 0,
+    "missing_proposal_fields": 0,
+    "missing_evidence_fields": 0,
+    "thin_evidence_categories": []
+  }
+}

@@ -127,11 +127,20 @@ async def _portfolio_projects_for_context(db, current_project_id: ObjectId) -> l
 async def _run_review_pipeline(project_doc: dict) -> dict:
     db = get_database()
     approved_projects = await _approved_projects_for_treasury(db, project_doc["_id"])
-    feature_vector = feature_extraction_agent.extract_features(project_doc)
+    treasury_snapshot = treasury_agent.summarize_portfolio(approved_projects)
+    scoring_review = feature_extraction_agent.run_scoring_review(
+        project_doc,
+        treasury_snapshot=treasury_snapshot.model_dump(mode="json"),
+    )
+    feature_vector = scoring_review["features"]
+    scorecard = scoring_review["scorecard"]
+    funding_package_draft = scoring_review["funding_package_draft"]
 
     evaluation_input = {
         **project_doc,
         "feature_vector": feature_vector,
+        "scorecard": scorecard,
+        "funding_package_draft": funding_package_draft,
     }
     evaluation = evaluation_agent.evaluate_project(evaluation_input)
     funding_decision, treasury_allocation, status = funding_decision_agent.decide(
@@ -146,6 +155,8 @@ async def _run_review_pipeline(project_doc: dict) -> dict:
         "ranking_score": evaluation.overall_score,
         "funding_amount": funding_decision.funding_package.approved_amount,
         "feature_vector": feature_vector,
+        "scorecard": scorecard,
+        "funding_package_draft": funding_package_draft,
         "evaluation": evaluation.model_dump(mode="json"),
         "funding_decision": funding_decision.model_dump(mode="json"),
         "treasury_allocation": treasury_allocation.model_dump(mode="json"),
@@ -175,6 +186,8 @@ async def create_project(project: ProjectCreate) -> ProjectResponse:
         "funding_amount": None,
         "enriched_data": None,
         "feature_vector": None,
+        "scorecard": None,
+        "funding_package_draft": None,
         "evaluation": None,
         "funding_decision": None,
         "treasury_allocation": None,

@@ -68,6 +68,8 @@ class MilestoneVerificationType(str, Enum):
     repository_activity = "repository_activity"
     deployment_proof = "deployment_proof"
     kpi_evidence = "kpi_evidence"
+    documentation_review = "documentation_review"
+    financial_review = "financial_review"
 
 
 class BudgetLineItem(BaseModel):
@@ -197,6 +199,8 @@ class ProjectUpdate(BaseModel):
     funding_amount: Optional[float] = None
     enriched_data: Optional[dict[str, Any]] = None
     feature_vector: Optional[dict[str, Any]] = None
+    scorecard: Optional[dict[str, Any]] = None
+    funding_package_draft: Optional[dict[str, Any]] = None
     escrow_info: Optional[EscrowInfo] = None
     evaluation: Optional[EvaluationResult] = None
     treasury_allocation: Optional[TreasuryAllocation] = None
@@ -212,6 +216,8 @@ class ProjectInDB(ProjectCreate):
     funding_amount: Optional[float] = None
     enriched_data: Optional[dict[str, Any]] = None
     feature_vector: Optional[dict[str, Any]] = None
+    scorecard: Optional[dict[str, Any]] = None
+    funding_package_draft: Optional[dict[str, Any]] = None
     escrow_info: Optional[EscrowInfo] = None
     evaluation: Optional[EvaluationResult] = None
     treasury_allocation: Optional[TreasuryAllocation] = None

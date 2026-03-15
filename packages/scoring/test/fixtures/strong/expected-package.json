@@ -1,0 +1,41 @@
+{
+  "schema_version": "funding-package-v1",
+  "proposal_id": "prop_strong",
+  "recommendation_label": "accept_reduced",
+  "requested_amount_usd": 180000,
+  "recommended_amount_usd": 159500,
+  "treasury_capacity_usd": 530000,
+  "rationale_codes": [
+    "REDUCED_FUNDING_RECOMMENDED"
+  ],
+  "milestones": [
+    {
+      "index": 1,
+      "amount_usd": 39750,
+      "deliverable_type": "beta_release",
+      "deadline": "P42D",
+      "verification_method": "deployment_proof",
+      "rationale_codes": [
+        "INITIAL_RELEASE"
+      ]
+    },
+    {
+      "index": 2,
+      "amount_usd": 52500,
+      "deliverable_type": "feature_release",
+      "deadline": "P84D",
+      "verification_method": "repository_activity",
+      "rationale_codes": []
+    },
+    {
+      "index": 3,
+      "amount_usd": 67250,
+      "deliverable_type": "usage_growth",
+      "deadline": "P126D",
+      "verification_method": "kpi_evidence",
+      "rationale_codes": [
+        "FINAL_VERIFICATION_GATE"
+      ]
+    }
+  ]
+}

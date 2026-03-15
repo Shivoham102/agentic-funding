@@ -59,6 +59,8 @@ class EvaluationAgent:
         category = self._enum_value(project.get("category"), ProjectCategory.other.value)
         enriched = self._as_dict(project.get("enriched_data"))
         feature_vector = self._as_dict(project.get("feature_vector"))
+        scorecard = self._as_dict(project.get("scorecard"))
+        funding_package_draft = self._as_dict(project.get("funding_package_draft"))
         feature_numeric = self._as_dict(feature_vector.get("numeric"))
         feature_categorical = self._as_dict(feature_vector.get("categorical"))
         feature_missingness = self._as_dict(feature_vector.get("missingness_summary"))
@@ -75,6 +77,15 @@ class EvaluationAgent:
         missing_evidence = self._to_float(feature_missingness.get("missing_evidence_fields"))
         if missing_evidence > 0:
             metrics["missing_evidence_fields"] = missing_evidence
+
+        if scorecard.get("schema_version") == "scorecard-v1":
+            return self._evaluation_from_scorecard(
+                project=project,
+                metrics=metrics,
+                feature_vector=feature_vector,
+                scorecard=scorecard,
+                funding_package_draft=funding_package_draft,
+            )
 
         data_completeness = self._metric(feature_numeric, "proposal_completeness_ratio")
         if data_completeness <= 0:
@@ -166,6 +177,83 @@ class EvaluationAgent:
             strengths=strengths,
             concerns=concerns,
             policy_notes=policy_notes,
+            data_completeness=self._round(data_completeness, 4),
+            evidence_coverage=self._round(evidence_coverage, 4),
+            recommended_funding_amount=recommended_amount,
+            recommended_allocation_ratio=allocation_ratio,
+        )
+
+    def _evaluation_from_scorecard(
+        self,
+        project: dict[str, Any],
+        metrics: dict[str, Any],
+        feature_vector: dict[str, Any],
+        scorecard: dict[str, Any],
+        funding_package_draft: dict[str, Any],
+    ) -> EvaluationResult:
+        feature_numeric = self._as_dict(feature_vector.get("numeric"))
+        feature_missingness = self._as_dict(feature_vector.get("missingness_summary"))
+        breakdown_raw = self._as_dict(scorecard.get("subscores"))
+        confidence_ratio = self._to_float(scorecard.get("confidence"))
+        confidence_score = self._round(confidence_ratio * 100.0)
+        confidence_level = self._confidence_level(confidence_score)
+        risk_band = self._as_dict(scorecard.get("risk_band"))
+        risk_score = self._round(self._to_float(risk_band.get("score")))
+        risk_value = str(scorecard.get("risk_classification") or "").strip().lower()
+        risk_classification = (
+            RiskClassification(risk_value)
+            if risk_value in {item.value for item in RiskClassification}
+            else self._risk_classification(risk_score)
+        )
+
+        breakdown = ScoreBreakdown(
+            team_quality=self._bounded(self._to_float(breakdown_raw.get("team_quality"))),
+            market_opportunity=self._bounded(self._to_float(breakdown_raw.get("market_opportunity"))),
+            product_feasibility=self._bounded(self._to_float(breakdown_raw.get("product_feasibility"))),
+            capital_efficiency=self._bounded(self._to_float(breakdown_raw.get("capital_efficiency"))),
+            traction_signals=self._bounded(self._to_float(breakdown_raw.get("traction_signals"))),
+            risk_indicators=self._bounded(self._to_float(breakdown_raw.get("risk_indicators"))),
+        )
+
+        recommended_amount = self._round(self._to_float(funding_package_draft.get("recommended_amount_usd")))
+        requested_funding = self._to_float(project.get("requested_funding"))
+        allocation_ratio = self._round(min(1.0, recommended_amount / requested_funding), 4) if requested_funding > 0 else 0.0
+        data_completeness = self._metric(feature_numeric, "proposal_completeness_ratio")
+        evidence_coverage = self._metric(feature_numeric, "evidence_category_coverage_ratio")
+        if data_completeness <= 0:
+            data_completeness = self._calculate_data_completeness(project, metrics)
+        if evidence_coverage <= 0:
+            evidence_coverage = self._calculate_evidence_coverage(project, self._as_dict(project.get("enriched_data")), metrics)
+
+        strengths, concerns = self._build_observations(
+            breakdown=breakdown,
+            confidence_level=confidence_level,
+            risk_classification=risk_classification,
+            project=project,
+            metrics=metrics,
+            feature_vector=feature_vector,
+        )
+        policy_notes = self._build_policy_notes(
+            requested_funding=requested_funding,
+            recommended_amount=recommended_amount,
+            confidence_level=confidence_level,
+            evidence_coverage=evidence_coverage,
+        )
+        scorecard_reason_codes = self._string_list(scorecard.get("reason_codes"))
+        if scorecard_reason_codes:
+            summary = ", ".join(scorecard_reason_codes[:4]).replace("_", " ").lower()
+            policy_notes.append(f"Scorecard reason codes influencing the review: {summary}.")
+
+        return EvaluationResult(
+            overall_score=self._bounded(self._to_float(scorecard.get("overall_score"))),
+            confidence_score=confidence_score,
+            confidence_level=confidence_level,
+            risk_score=risk_score,
+            risk_classification=risk_classification,
+            breakdown=breakdown,
+            strengths=strengths,
+            concerns=concerns,
+            policy_notes=policy_notes[:4],
             data_completeness=self._round(data_completeness, 4),
             evidence_coverage=self._round(evidence_coverage, 4),
             recommended_funding_amount=recommended_amount,

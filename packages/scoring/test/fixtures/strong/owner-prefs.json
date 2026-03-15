@@ -1,0 +1,6 @@
+{
+  "risk_tolerance": "balanced",
+  "minimum_confidence": 0.45,
+  "minimum_overall_score": 60,
+  "minimum_ticket_usd": 10000
+}
