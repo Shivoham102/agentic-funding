@@ -5,54 +5,32 @@ from datetime import datetime, timezone
 from database import get_database
 from config import Settings
 from agents.payment import PaymentAgent
-from agents.oracle import EscrowOracle
-from agents.data_collector import DataCollectorAgent
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
+USDC_DECIMALS = 6
+
 settings = Settings()
 payment_agent = PaymentAgent(settings)
-data_collector = DataCollectorAgent(
-    unbrowse_api_key=settings.UNBROWSE_API_KEY,
-    base_url=settings.UNBROWSE_URL,
-    timeout_seconds=settings.UNBROWSE_TIMEOUT_SECONDS,
-    max_retries=settings.UNBROWSE_MAX_RETRIES,
-    solana_rpc_url=settings.SOLANA_RPC_URL,
-    solana_commitment=settings.SOLANA_RPC_COMMITMENT,
-    solana_recent_signature_limit=settings.SOLANA_RECENT_SIGNATURE_LIMIT,
-    solana_analytics_provider=settings.SOLANA_ANALYTICS_PROVIDER,
-    solana_analytics_signature_limit=settings.SOLANA_ANALYTICS_SIGNATURE_LIMIT,
-    solana_timeout_seconds=settings.SOLANA_TIMEOUT_SECONDS,
-    solana_max_retries=settings.SOLANA_MAX_RETRIES,
-    github_api_url=settings.GITHUB_API_URL,
-    github_api_token=settings.GITHUB_API_TOKEN,
-    github_timeout_seconds=settings.GITHUB_TIMEOUT_SECONDS,
-    github_max_retries=settings.GITHUB_MAX_RETRIES,
-    github_commits_lookback_days=settings.GITHUB_COMMITS_LOOKBACK_DAYS,
-    github_max_pages=settings.GITHUB_MAX_PAGES,
-    gemini_api_key=settings.GEMINI_API_KEY,
-    gemini_api_url=settings.GEMINI_API_URL,
-    gemini_market_model=settings.GEMINI_MARKET_MODEL,
-    gemini_timeout_seconds=settings.GEMINI_TIMEOUT_SECONDS,
-    gemini_max_retries=settings.GEMINI_MAX_RETRIES,
-    gemini_min_request_interval_seconds=settings.GEMINI_MIN_REQUEST_INTERVAL_SECONDS,
-    market_search_timeout_seconds=settings.MARKET_SEARCH_TIMEOUT_SECONDS,
-    market_search_results_per_query=settings.MARKET_SEARCH_RESULTS_PER_QUERY,
-    market_max_source_documents=settings.MARKET_MAX_SOURCE_DOCUMENTS,
-)
-oracle = EscrowOracle(payment_agent, data_collector)
 
 
-class ProcessPaymentRequest(BaseModel):
+class CreateEscrowRequest(BaseModel):
     project_id: str
-    recipient_address: str
-    amount: int
-    arbiter_address: str = ""
+    amount: float  # USDC human-readable (e.g. 100.0)
+    demand: str  # Natural language condition
 
 
-class ReleaseEscrowRequest(BaseModel):
+class FulfillRequest(BaseModel):
     project_id: str
-    escrow_attestation_uid: str
+    fulfillment_evidence: str
+
+
+class ArbitrateRequest(BaseModel):
+    project_id: str
+
+
+class CollectRequest(BaseModel):
+    project_id: str
 
 
 @router.on_event("startup")
@@ -60,14 +38,15 @@ async def startup():
     await payment_agent.initialize()
 
 
-@router.post("/process")
-async def process_payment(req: ProcessPaymentRequest):
-    """Process a funding payment: 50% direct + 50% escrow."""
-    result = await payment_agent.process_payment(
+@router.post("/create-escrow")
+async def create_escrow(req: CreateEscrowRequest):
+    """Create an escrow with a natural language condition for a project."""
+    raw_amount = int(req.amount * (10 ** USDC_DECIMALS))
+
+    result = await payment_agent.create_escrow(
         project_id=req.project_id,
-        recipient_address=req.recipient_address,
-        amount=req.amount,
-        arbiter_address=req.arbiter_address,
+        amount=raw_amount,
+        demand=req.demand,
     )
 
     # Store escrow info in the project document
@@ -80,75 +59,160 @@ async def process_payment(req: ProcessPaymentRequest):
                 {
                     "$set": {
                         "escrow_info": {
-                            "escrow_attestation_uid": result.get("escrow_attestation_uid"),
-                            "escrowed_amount": result.get("escrowed_amount"),
-                            "direct_tx_hash": result.get("direct_tx_hash"),
-                            "escrow_tx_hash": result.get("escrow_tx_hash"),
-                            "arbiter_address": result.get("arbiter_address"),
-                            "status": "active",
+                            "escrow_uid": result.get("escrow_uid"),
+                            "amount": raw_amount,
+                            "demand": req.demand,
+                            "oracle_address": result.get("oracle_address"),
+                            "token_address": result.get("token_address"),
+                            "status": result.get("status"),
                             "created_at": datetime.now(timezone.utc).isoformat(),
                         },
                         "status": "funded",
-                        "funding_amount": result.get("total_amount"),
+                        "funding_amount": raw_amount,
                         "updated_at": datetime.now(timezone.utc),
                     }
                 },
             )
         except Exception:
-            pass  # Non-critical: payment was processed, DB update is secondary
+            pass  # Non-critical: escrow was created, DB update is secondary
 
     return result
 
 
-@router.post("/release")
-async def release_escrow(req: ReleaseEscrowRequest):
-    """Manually trigger escrow release for a project."""
-    result = await payment_agent.release_escrow(
-        project_id=req.project_id,
-        escrow_attestation_uid=req.escrow_attestation_uid,
-    )
-
-    if result.get("released"):
-        db = get_database()
-        if db is not None:
-            from bson import ObjectId
-            try:
-                await db.projects.update_one(
-                    {"_id": ObjectId(req.project_id)},
-                    {
-                        "$set": {
-                            "escrow_info.status": "released",
-                            "escrow_info.release_tx_hash": result.get("fulfillment_tx_hash"),
-                            "escrow_info.released_at": datetime.now(timezone.utc).isoformat(),
-                            "updated_at": datetime.now(timezone.utc),
-                        }
-                    },
-                )
-            except Exception:
-                pass
-
-    return result
-
-
-@router.post("/oracle/check")
-async def run_oracle_check():
-    """Manually trigger an oracle check cycle for all funded projects."""
+@router.post("/fulfill")
+async def submit_fulfillment(req: FulfillRequest):
+    """Submit fulfillment evidence for a project's escrow."""
     db = get_database()
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available")
 
-    cursor = db.projects.find({
-        "status": "funded",
-        "escrow_info.status": "active",
-    })
-    funded_projects = await cursor.to_list(length=100)
+    from bson import ObjectId
+    try:
+        project = await db.projects.find_one({"_id": ObjectId(req.project_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
 
-    # Convert ObjectId to string for each project
-    for p in funded_projects:
-        p["id"] = str(p["_id"])
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
 
-    results = await oracle.run_check_cycle(funded_projects)
-    return {"checked": len(results), "results": results}
+    escrow_info = project.get("escrow_info", {})
+    escrow_uid = escrow_info.get("escrow_uid")
+    if not escrow_uid:
+        raise HTTPException(status_code=400, detail="No escrow found for this project")
+
+    result = await payment_agent.submit_fulfillment(
+        escrow_uid=escrow_uid,
+        fulfillment_evidence=req.fulfillment_evidence,
+    )
+
+    # Store fulfillment UID in DB
+    if result.get("fulfillment_uid"):
+        try:
+            await db.projects.update_one(
+                {"_id": ObjectId(req.project_id)},
+                {
+                    "$set": {
+                        "escrow_info.fulfillment_uid": result["fulfillment_uid"],
+                        "escrow_info.fulfillment_evidence": req.fulfillment_evidence,
+                        "escrow_info.status": "fulfilled",
+                        "updated_at": datetime.now(timezone.utc),
+                    }
+                },
+            )
+        except Exception:
+            pass
+
+    return result
+
+
+@router.post("/arbitrate")
+async def arbitrate(req: ArbitrateRequest):
+    """Trigger LLM arbitration for a project's escrow."""
+    db = get_database()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    from bson import ObjectId
+    try:
+        project = await db.projects.find_one({"_id": ObjectId(req.project_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    escrow_info = project.get("escrow_info", {})
+    escrow_uid = escrow_info.get("escrow_uid")
+    if not escrow_uid:
+        raise HTTPException(status_code=400, detail="No escrow found for this project")
+
+    result = await payment_agent.arbitrate(escrow_uid=escrow_uid)
+
+    # Update status in DB
+    if result.get("status") == "arbitrated":
+        try:
+            await db.projects.update_one(
+                {"_id": ObjectId(req.project_id)},
+                {
+                    "$set": {
+                        "escrow_info.status": "arbitrated",
+                        "updated_at": datetime.now(timezone.utc),
+                    }
+                },
+            )
+        except Exception:
+            pass
+
+    return result
+
+
+@router.post("/collect")
+async def collect_funds(req: CollectRequest):
+    """Collect funds from an approved escrow."""
+    db = get_database()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    from bson import ObjectId
+    try:
+        project = await db.projects.find_one({"_id": ObjectId(req.project_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    escrow_info = project.get("escrow_info", {})
+    escrow_uid = escrow_info.get("escrow_uid")
+    fulfillment_uid = escrow_info.get("fulfillment_uid")
+
+    if not escrow_uid:
+        raise HTTPException(status_code=400, detail="No escrow found for this project")
+    if not fulfillment_uid:
+        raise HTTPException(status_code=400, detail="No fulfillment found - submit evidence first")
+
+    result = await payment_agent.collect_funds(
+        escrow_uid=escrow_uid,
+        fulfillment_uid=fulfillment_uid,
+    )
+
+    # Update status in DB
+    if result.get("status") == "collected":
+        try:
+            await db.projects.update_one(
+                {"_id": ObjectId(req.project_id)},
+                {
+                    "$set": {
+                        "escrow_info.status": "collected",
+                        "escrow_info.collected_at": datetime.now(timezone.utc).isoformat(),
+                        "updated_at": datetime.now(timezone.utc),
+                    }
+                },
+            )
+        except Exception:
+            pass
+
+    return result
 
 
 @router.get("/escrow/{project_id}")
@@ -171,10 +235,17 @@ async def get_escrow_status(project_id: str):
     if not escrow_info:
         return {"project_id": project_id, "has_escrow": False}
 
+    # Optionally check on-chain status
+    escrow_uid = escrow_info.get("escrow_uid")
+    on_chain_status = None
+    if escrow_uid and payment_agent._is_ready():
+        on_chain_status = await payment_agent.get_escrow_status(escrow_uid)
+
     return {
         "project_id": project_id,
         "has_escrow": True,
         "escrow_info": escrow_info,
+        "on_chain_status": on_chain_status,
         "project_status": project.get("status"),
         "funding_amount": project.get("funding_amount"),
     }

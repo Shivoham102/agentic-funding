@@ -476,7 +476,7 @@ export default function SubmitPage() {
 
               <div>
                 <label htmlFor="requested_funding" className={labelClass}>
-                  Requested Funding (USD)
+                  Requested Funding (USDC)
                 </label>
                 <input
                   type="number"
@@ -486,8 +486,11 @@ export default function SubmitPage() {
                   value={formData.requested_funding}
                   onChange={handleChange}
                   className="input-dark"
-                  placeholder="e.g. 75000"
+                  placeholder="e.g. 100"
                 />
+                <p className="text-xs text-[var(--text-muted)] mt-1.5">
+                  Amount in USDC (e.g. 2 = 2 USDC)
+                </p>
               </div>
             </div>
 

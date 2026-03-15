@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     ESCROW_GROWTH_TARGET: float = 30.0
     ESCROW_CHECK_INTERVAL_MINUTES: int = 60
 
+    # LLM Provider Keys (for NLA oracle arbitration)
+    OPENAI_API_KEY: str = ""
+    ANTHROPIC_API_KEY: str = ""
+
     class Config:
         env_file = ENV_FILE
 
