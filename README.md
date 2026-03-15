@@ -49,8 +49,8 @@ What it is used for in this repo:
 
 Where it lives:
 
-- [backend/agents/data_collector.py](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/agents/data_collector.py)
-- [packages/diligence/src/unbrowseClient.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/diligence/src/unbrowseClient.ts)
+- [backend/agents/data_collector.py]
+- [packages/diligence/src/unbrowseClient.ts]
 
 How it is used:
 
@@ -88,8 +88,8 @@ What AutoVC pulls from Solana:
 
 Where it lives:
 
-- [backend/agents/solana_enrichment.py](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/agents/solana_enrichment.py)
-- [packages/diligence/src/solanaEnrichment.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/diligence/src/solanaEnrichment.ts)
+- [backend/agents/solana_enrichment.py]
+- [packages/diligence/src/solanaEnrichment.ts]
 
 Why Solana matters in AutoVC:
 
@@ -128,10 +128,10 @@ Treasury buckets:
 
 Where it lives:
 
-- [backend/agents/treasury.py](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/agents/treasury.py)
-- [packages/treasury/src/treasuryPolicy.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/treasury/src/treasuryPolicy.ts)
-- [packages/treasury/src/meteoraVault.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/treasury/src/meteoraVault.ts)
-- [backend/routes/treasury.py](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/routes/treasury.py)
+- [backend/agents/treasury.py]
+- [packages/treasury/src/treasuryPolicy.ts]
+- [packages/treasury/src/meteoraVault.ts]
+- [backend/routes/treasury.py]
 
 What Meteora contributes:
 
@@ -162,8 +162,8 @@ The execution layer in this repo is the milestone-funding and escrow rail.
 
 The historical product language in this project refers to Arkhai-style execution. In the codebase today, the working implementation is the Base Sepolia NLA / Alkahest-compatible flow in:
 
-- [backend/agents/payment.py](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/agents/payment.py)
-- [backend/services/funding_execution.py](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/services/funding_execution.py)
+- [backend/agents/payment.py]
+- [backend/services/funding_execution.py]
 
 What it does:
 
@@ -218,7 +218,7 @@ flowchart TD
 
 The submission schema is defined in:
 
-- [backend/models/project.py](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/models/project.py)
+- [backend/models/project.py]
 
 The founder submits:
 
@@ -238,7 +238,7 @@ The backend route is:
 
 Route file:
 
-- [backend/routes/projects.py](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/routes/projects.py)
+- [backend/routes/projects.py]
 
 On create, the backend already runs a deterministic review pipeline. That means every proposal gets:
 
@@ -270,7 +270,7 @@ This route:
 
 Primary file:
 
-- [backend/agents/data_collector.py](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/agents/data_collector.py)
+- [backend/agents/data_collector.py]
 
 Enrichment sources:
 
@@ -289,8 +289,8 @@ The normalized evidence goal is simple:
 
 Canonical evidence shape is implemented in:
 
-- [packages/diligence/src/types.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/diligence/src/types.ts)
-- [packages/diligence/src/evidenceBundle.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/diligence/src/evidenceBundle.ts)
+- [packages/diligence/src/types.ts]
+- [packages/diligence/src/evidenceBundle.ts]
 
 AutoVC stores evidence as:
 
@@ -318,8 +318,8 @@ Features are extracted from the canonical proposal plus normalized evidence.
 
 Where it lives:
 
-- [packages/scoring/src/features.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/scoring/src/features.ts)
-- [backend/agents/feature_extraction.py](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/agents/feature_extraction.py)
+- [packages/scoring/src/features.ts]
+- [backend/agents/feature_extraction.py]
 
 Key rule:
 
@@ -342,9 +342,9 @@ Scoring runs in the TypeScript package and is bridged into the Python backend.
 
 Where it lives:
 
-- [packages/scoring/src/scoringEngine.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/scoring/src/scoringEngine.ts)
-- [packages/scoring/src/cli.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/scoring/src/cli.ts)
-- [backend/agents/feature_extraction.py](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/agents/feature_extraction.py)
+- [packages/scoring/src/scoringEngine.ts]
+- [packages/scoring/src/cli.ts]
+- [backend/agents/feature_extraction.py]
 
 Subscores:
 
@@ -381,9 +381,9 @@ Then, if enabled, it considers Meteora vaults for idle deployment suggestions.
 
 Main files:
 
-- [backend/agents/treasury.py](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/agents/treasury.py)
-- [packages/treasury/src/treasuryPolicy.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/treasury/src/treasuryPolicy.ts)
-- [packages/treasury/src/meteoraVault.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/treasury/src/meteoraVault.ts)
+- [backend/agents/treasury.py]
+- [packages/treasury/src/treasuryPolicy.ts]
+- [packages/treasury/src/meteoraVault.ts]
 
 Public treasury route:
 
@@ -398,9 +398,9 @@ The decision layer is intentionally hybrid:
 
 Where it lives:
 
-- [backend/agents/decision.py](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/agents/decision.py)
-- [packages/decision/src/decisionAgent.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/decision/src/decisionAgent.ts)
-- [packages/decision/src/geminiDecisionAgent.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/decision/src/geminiDecisionAgent.ts)
+- [backend/agents/decision.py]
+- [packages/decision/src/decisionAgent.ts]
+- [packages/decision/src/geminiDecisionAgent.ts]
 
 Decision outputs:
 
@@ -427,7 +427,7 @@ Decision proposals do not go straight to execution.
 
 They are verified using Z3 in:
 
-- [packages/decision/src/policyVerifier.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/decision/src/policyVerifier.ts)
+- [packages/decision/src/policyVerifier.ts]
 
 The verifier checks:
 
@@ -468,7 +468,7 @@ After scoring, treasury review, and decision verification, the backend persists:
 
 This happens inside:
 
-- [backend/routes/projects.py](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/routes/projects.py)
+- [backend/routes/projects.py]
 
 ### 10. Explicit Funding Execution Handoff
 
@@ -482,7 +482,7 @@ Review remains analysis-only. Execution is a separate side-effectful step:
 
 Execution service:
 
-- [backend/services/funding_execution.py](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/services/funding_execution.py)
+- [backend/services/funding_execution.py]
 
 Execution rules:
 
@@ -516,7 +516,7 @@ Deferred funding:
 
 Payment agent file:
 
-- [backend/agents/payment.py](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/agents/payment.py)
+- [backend/agents/payment.py]
 
 Execution results are persisted as:
 
@@ -542,9 +542,9 @@ Purpose:
 
 Key files:
 
-- [packages/diligence/src/unbrowseClient.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/diligence/src/unbrowseClient.ts)
-- [packages/diligence/src/solanaEnrichment.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/diligence/src/solanaEnrichment.ts)
-- [packages/diligence/src/evidenceBundle.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/diligence/src/evidenceBundle.ts)
+- [packages/diligence/src/unbrowseClient.ts]
+- [packages/diligence/src/solanaEnrichment.ts]
+- [packages/diligence/src/evidenceBundle.ts]
 
 ### `packages/scoring`
 
@@ -558,8 +558,8 @@ Purpose:
 
 Key files:
 
-- [packages/scoring/src/features.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/scoring/src/features.ts)
-- [packages/scoring/src/scoringEngine.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/scoring/src/scoringEngine.ts)
+- [packages/scoring/src/features.ts]
+- [packages/scoring/src/scoringEngine.ts]
 
 ### `packages/decision`
 
@@ -573,8 +573,8 @@ Purpose:
 
 Key files:
 
-- [packages/decision/src/review.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/decision/src/review.ts)
-- [packages/decision/src/policyVerifier.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/decision/src/policyVerifier.ts)
+- [packages/decision/src/review.ts]
+- [packages/decision/src/policyVerifier.ts]
 
 ### `packages/treasury`
 
@@ -586,9 +586,9 @@ Purpose:
 
 Key files:
 
-- [packages/treasury/src/treasuryPolicy.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/treasury/src/treasuryPolicy.ts)
-- [packages/treasury/src/meteoraVault.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/treasury/src/meteoraVault.ts)
-- [packages/treasury/src/httpClient.ts](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/packages/treasury/src/httpClient.ts)
+- [packages/treasury/src/treasuryPolicy.ts]
+- [packages/treasury/src/meteoraVault.ts]
+- [packages/treasury/src/httpClient.ts]
 
 ### `backend`
 
@@ -636,7 +636,7 @@ Treasury route:
 
 Legacy / separate payment routes also exist in:
 
-- [backend/routes/payments.py](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/routes/payments.py)
+- [backend/routes/payments.py]
 
 ## Data Artifacts Persisted Per Proposal
 
@@ -722,11 +722,11 @@ Backend runs at:
 
 Backend env file:
 
-- [backend/.env.example](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/backend/.env.example)
+- [backend/.env.example]
 
 Frontend env file:
 
-- [frontend/.env.local.example](/C:/Users/deepa/Desktop/Hackathon/agentic-funding/frontend/.env.local.example)
+- [frontend/.env.local.example]
 
 ### Unbrowse
 
