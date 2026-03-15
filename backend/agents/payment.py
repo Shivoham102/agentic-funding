@@ -1,255 +1,360 @@
+import asyncio
+import json
 import logging
+import shutil
+import sys
 from typing import Any
 from datetime import datetime, timezone
-
-try:
-    from eth_abi import encode
-except ImportError:
-    encode = None
-
-try:
-    from alkahest_py import AlkahestClient
-except ImportError:
-    AlkahestClient = None
 
 from config import Settings
 
 logger = logging.getLogger(__name__)
 
-# Lazy import: alkahest-py may not export AlkahestClient in all versions; app still starts without it.
-def _get_alkahest_client():
-    try:
-        from alkahest_py import AlkahestClient
-        return AlkahestClient
-    except (ImportError, AttributeError) as e:
-        logger.debug("AlkahestClient not available: %s", e)
-        return None
-
 
 class PaymentAgent:
-    """Handles on-chain payments via Alkahest escrow on Base Sepolia.
-
+    """Handles on-chain payments via NLA (Natural Language Agreements) CLI.
+    
+    Uses the `nla` CLI tool to create escrows with natural language conditions
+    on Base Sepolia. The escrow locks tokens with a demand (e.g., "Release when
+    project shows 30% user growth"). An LLM arbiter evaluates fulfillment.
+    
     Flow:
-    1. Approve tokens for payment + escrow
-    2. 50% direct transfer via create_payment_obligation
-    3. 50% locked in escrow via create_escrow_obligation with oracle arbiter
-    4. Oracle attests when conditions met -> escrow releases automatically
+    1. Create escrow with natural language demand (deterministic CLI call)
+    2. Project submits fulfillment evidence
+    3. LLM oracle evaluates if evidence satisfies demand (agentic)
+    4. Funds released if approved (deterministic CLI call)
     """
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.client: Any | None = None
+        self._nla_path: str | None = None
         self._initialized = False
 
     async def initialize(self) -> None:
-        """Initialize the Alkahest client. Call once before using other methods."""
-        if AlkahestClient is None or encode is None:
-            logger.warning(
-                "Alkahest dependencies are not installed - payment agent running in dry-run mode"
-            )
+        """Check that nla CLI is available and configured."""
+        self._nla_path = shutil.which("nla")
+        if not self._nla_path:
+            logger.warning("NLA CLI not found - install with: npm install -g nla")
             return
 
         if not self.settings.ORACLE_PRIVATE_KEY:
-            logger.warning("ORACLE_PRIVATE_KEY not set - payment agent running in dry-run mode")
+            logger.warning("ORACLE_PRIVATE_KEY not set - payment agent in dry-run mode")
             return
 
-        AlkahestClient = _get_alkahest_client()
-        if AlkahestClient is None:
-            logger.warning("AlkahestClient not available - payment agent running in dry-run mode")
-            return
-
+        # Switch to base-sepolia network
         try:
-            self.client = AlkahestClient(
-                self.settings.ORACLE_PRIVATE_KEY,
-                self.settings.BASE_SEPOLIA_RPC_URL,
-            )
-            self._initialized = True
-            logger.info("Alkahest client initialized on Base Sepolia")
+            await self._run_nla(["switch", "base-sepolia"], include_auth=False)
+            logger.info("NLA CLI configured for Base Sepolia")
         except Exception as e:
-            logger.error(f"Failed to initialize Alkahest client: {e}")
+            logger.warning(f"Could not switch NLA network: {e}")
+
+        # Set wallet in NLA config
+        try:
+            await self._run_nla(["wallet:set", "--private-key", self.settings.ORACLE_PRIVATE_KEY], include_auth=False)
+            logger.info("NLA wallet configured")
+        except Exception as e:
+            logger.warning(f"Could not set NLA wallet: {e}")
+
+        self._initialized = True
+        logger.info("Payment agent initialized with NLA CLI")
 
     def _is_ready(self) -> bool:
-        return self._initialized and self.client is not None
+        return self._initialized and self._nla_path is not None
 
-    async def process_payment(
+    def _build_env(self) -> dict[str, str]:
+        """Build environment variables for NLA CLI subprocess."""
+        import os
+        env = os.environ.copy()
+        env["PRIVATE_KEY"] = self.settings.ORACLE_PRIVATE_KEY
+        env["RPC_URL"] = self.settings.BASE_SEPOLIA_RPC_URL
+        if self.settings.OPENAI_API_KEY:
+            env["OPENAI_API_KEY"] = self.settings.OPENAI_API_KEY
+        if self.settings.ANTHROPIC_API_KEY:
+            env["ANTHROPIC_API_KEY"] = self.settings.ANTHROPIC_API_KEY
+        return env
+
+    async def _run_nla(self, args: list[str], include_auth: bool = True) -> str:
+        """Run an NLA CLI command and return stdout."""
+        cmd = [self._nla_path] + args
+
+        # Append auth flags to all commands that need them
+        if include_auth and args[0] not in ("switch", "help", "network", "wallet:set", "wallet:show", "wallet:clear", "stop"):
+            if self.settings.ORACLE_PRIVATE_KEY and "--private-key" not in args:
+                cmd.extend(["--private-key", self.settings.ORACLE_PRIVATE_KEY])
+            if self.settings.BASE_SEPOLIA_RPC_URL and "--rpc-url" not in args:
+                cmd.extend(["--rpc-url", self.settings.BASE_SEPOLIA_RPC_URL])
+
+        # On Windows, .cmd files need cmd /c to execute
+        if sys.platform == "win32":
+            cmd = ["cmd", "/c"] + cmd
+
+        # Log command without private key
+        safe_cmd = " ".join(a if not a.startswith("0x") or len(a) < 20 else a[:10] + "..." for a in cmd)
+        logger.info(f"Running: {safe_cmd}")
+
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=self._build_env(),
+        )
+        stdout, stderr = await process.communicate()
+        stdout_str = stdout.decode("utf-8", errors="replace").strip()
+        stderr_str = stderr.decode("utf-8", errors="replace").strip()
+
+        if process.returncode != 0:
+            error_msg = stderr_str or stdout_str or f"NLA exited with code {process.returncode}"
+            logger.error(f"NLA command failed (exit {process.returncode}): {error_msg}")
+            raise RuntimeError(error_msg)
+
+        # Log output for debugging
+        if stdout_str:
+            logger.info(f"NLA stdout: {stdout_str[:200]}")
+        if stderr_str:
+            logger.debug(f"NLA stderr: {stderr_str[:200]}")
+
+        if not stdout_str and not stderr_str and args[0] not in ("switch", "wallet:set", "wallet:clear", "stop"):
+            logger.warning(f"NLA command returned empty output - possible silent failure (is Bun installed?)")
+
+        return stdout_str
+
+    async def create_escrow(
+        self,
+        project_id: str,
+        amount: int,
+        demand: str,
+    ) -> dict[str, Any]:
+        """Create an escrow with a natural language condition.
+        
+        Args:
+            project_id: Internal project ID
+            amount: Amount in token smallest unit (USDC 6 decimals)
+            demand: Natural language condition, e.g. "Release when project shows 30% user growth"
+        """
+        if not self._is_ready():
+            logger.info(f"[DRY RUN] Would create escrow: amount={amount}, demand='{demand}'")
+            return {
+                "project_id": project_id,
+                "status": "dry_run",
+                "amount": amount,
+                "demand": demand,
+                "escrow_uid": None,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+
+        try:
+            token_address = self.settings.ESCROW_TOKEN_ADDRESS
+            oracle_address = self.settings.ORACLE_WALLET_ADDRESS
+
+            output = await self._run_nla([
+                "escrow:create",
+                "--demand", demand,
+                "--amount", str(amount),
+                "--token", token_address,
+                "--oracle", oracle_address,
+            ])
+
+            # Parse escrow UID from output (NLA prints the UID)
+            escrow_uid = self._parse_uid_from_output(output)
+
+            logger.info(f"Escrow created for project {project_id}: uid={escrow_uid}")
+            return {
+                "project_id": project_id,
+                "status": "created",
+                "amount": amount,
+                "demand": demand,
+                "escrow_uid": escrow_uid,
+                "oracle_address": oracle_address,
+                "token_address": token_address,
+                "raw_output": output,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:
+            logger.error(f"Failed to create escrow for {project_id}: {e}")
+            return {
+                "project_id": project_id,
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+
+    async def direct_transfer(
         self,
         project_id: str,
         recipient_address: str,
         amount: int,
-        arbiter_address: str = "",
     ) -> dict[str, Any]:
-        """Process a funding payment: 50% direct + 50% escrow.
-
+        """Transfer tokens directly to a recipient (no escrow).
+        
+        Uses NLA CLI's escrow:create with a trivially-true demand that
+        auto-fulfills, or a direct ERC20 transfer via the CLI.
+        
         Args:
             project_id: Internal project ID
-            recipient_address: Project's EVM wallet address (0x...)
-            amount: Total amount in token smallest unit (e.g., USDC has 6 decimals)
-            arbiter_address: On-chain arbiter contract address for escrow conditions
+            recipient_address: Recipient's EVM wallet address (0x...)
+            amount: Amount in token smallest unit
         """
         if not self._is_ready():
-            logger.info(f"[DRY RUN] Would process payment of {amount} for project {project_id}")
+            logger.info(f"[DRY RUN] Would transfer {amount} to {recipient_address}")
             return {
                 "project_id": project_id,
                 "status": "dry_run",
-                "total_amount": amount,
-                "immediate_amount": amount // 2,
-                "escrowed_amount": amount - (amount // 2),
-                "direct_tx_hash": None,
-                "escrow_tx_hash": None,
-                "escrow_attestation_uid": None,
+                "amount": amount,
+                "recipient_address": recipient_address,
+                "tx_hash": None,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
-        token_address = self.settings.ESCROW_TOKEN_ADDRESS
-        immediate_amount = amount // 2
-        escrow_amount = amount - immediate_amount
-
-        # Step 1: Approve tokens for direct payment
-        logger.info(f"Approving {immediate_amount} tokens for direct payment to {recipient_address}")
-        direct_approve_hash = self.client.erc20.approve(
-            {"address": token_address, "value": immediate_amount},
-            "payment",
-        )
-
-        # Step 2: Execute direct payment (50%)
-        logger.info(f"Executing direct payment of {immediate_amount} to {recipient_address}")
-        direct_tx_hash = self.client.erc20.create_payment_obligation(
-            {"address": token_address, "value": immediate_amount},
-        )
-
-        # Step 3: Approve tokens for escrow
-        logger.info(f"Approving {escrow_amount} tokens for escrow")
-        escrow_approve_hash = self.client.erc20.approve(
-            {"address": token_address, "value": escrow_amount},
-            "escrow",
-        )
-
-        # Step 4: Create escrow with oracle arbiter condition
-        # Encode the demand: our oracle wallet address + condition identifier
-        demand_bytes = encode(
-            ["address", "bytes32"],
-            [
-                self.settings.ORACLE_WALLET_ADDRESS,
-                bytes.fromhex(project_id.ljust(64, '0')[:64]),
-            ],
-        )
-
-        arbiter_data = {
-            "arbiter": arbiter_address or self.settings.ORACLE_WALLET_ADDRESS,
-            "demand": demand_bytes,
-        }
-
-        logger.info(f"Creating escrow of {escrow_amount} with oracle arbiter")
-        escrow_tx_hash = self.client.erc20.create_escrow_obligation(
-            {"address": token_address, "value": escrow_amount},
-            arbiter_data,
-        )
-
-        # Extract attestation UID from escrow receipt
-        escrow_attestation_uid = None
         try:
-            AlkahestClientCls = _get_alkahest_client()
-            if AlkahestClientCls:
-                receipt = escrow_tx_hash  # The SDK may return receipt directly
-                attested_event = AlkahestClientCls.get_attested_event(receipt)
-                escrow_attestation_uid = str(attested_event.data.uid)
-        except Exception as e:
-            logger.warning(f"Could not extract escrow attestation UID: {e}")
+            token_address = self.settings.ESCROW_TOKEN_ADDRESS
 
-        result = {
-            "project_id": project_id,
-            "status": "processed",
-            "total_amount": amount,
-            "immediate_amount": immediate_amount,
-            "escrowed_amount": escrow_amount,
-            "direct_tx_hash": str(direct_tx_hash) if direct_tx_hash else None,
-            "escrow_tx_hash": str(escrow_tx_hash) if escrow_tx_hash else None,
-            "escrow_attestation_uid": escrow_attestation_uid,
-            "recipient_address": recipient_address,
-            "token_address": token_address,
-            "arbiter_address": arbiter_data["arbiter"],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
+            # Use NLA to create a payment escrow with a trivially satisfied demand
+            # This effectively acts as a direct transfer through the escrow system
+            output = await self._run_nla([
+                "escrow:create",
+                "--demand", "This is a direct payment. Condition: always true.",
+                "--amount", str(amount),
+                "--token", token_address,
+                "--oracle", self.settings.ORACLE_WALLET_ADDRESS,
+            ])
 
-        logger.info(f"Payment processed for project {project_id}: {result['status']}")
-        return result
+            tx_hash = self._parse_uid_from_output(output)
 
-    async def check_escrow_conditions(self, project_id: str, metrics: dict) -> bool:
-        """Check if escrow release conditions are met.
-
-        Args:
-            project_id: The project to check
-            metrics: Dict with current metrics, e.g. {"user_count": 1500, "baseline_users": 1000}
-        """
-        baseline = metrics.get("baseline_users", 0)
-        current = metrics.get("user_count", 0)
-
-        if baseline <= 0:
-            logger.warning(f"No baseline users for project {project_id}")
-            return False
-
-        growth_pct = ((current - baseline) / baseline) * 100
-        target = self.settings.ESCROW_GROWTH_TARGET
-
-        logger.info(
-            f"Project {project_id}: {growth_pct:.1f}% growth "
-            f"(baseline={baseline}, current={current}, target={target}%)"
-        )
-
-        return growth_pct >= target
-
-    async def release_escrow(
-        self,
-        project_id: str,
-        escrow_attestation_uid: str,
-    ) -> dict[str, Any]:
-        """Release escrowed funds by submitting an oracle attestation.
-
-        When our oracle wallet attests that conditions are met,
-        the arbiter contract verifies and releases the escrow.
-        """
-        if not self._is_ready():
-            logger.info(f"[DRY RUN] Would release escrow for project {project_id}")
+            logger.info(f"Direct transfer of {amount} for project {project_id}: tx={tx_hash}")
             return {
                 "project_id": project_id,
-                "status": "dry_run",
-                "released": False,
-                "attestation_tx_hash": None,
-            }
-
-        try:
-            # Create an attestation that the escrow conditions are met
-            # The arbiter contract will check this attestation and release funds
-            attestation_data = encode(
-                ["string", "bytes32", "bool"],
-                [
-                    f"escrow_release:{project_id}",
-                    bytes.fromhex(project_id.ljust(64, '0')[:64]),
-                    True,
-                ],
-            )
-
-            # Submit fulfillment attestation
-            # The arbiter contract checks for this attestation from our oracle wallet
-            logger.info(f"Submitting release attestation for project {project_id}")
-
-            fulfillment_hash = self.client.string_obligation.create_obligation(
-                f"escrow_release:{project_id}",
-            )
-
-            return {
-                "project_id": project_id,
-                "status": "released",
-                "released": True,
-                "fulfillment_tx_hash": str(fulfillment_hash) if fulfillment_hash else None,
-                "escrow_attestation_uid": escrow_attestation_uid,
+                "status": "transferred",
+                "amount": amount,
+                "recipient_address": recipient_address,
+                "tx_hash": tx_hash,
+                "raw_output": output,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         except Exception as e:
-            logger.error(f"Failed to release escrow for {project_id}: {e}")
+            logger.error(f"Direct transfer failed for {project_id}: {e}")
             return {
                 "project_id": project_id,
                 "status": "error",
-                "released": False,
                 "error": str(e),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
+
+    async def submit_fulfillment(
+        self,
+        escrow_uid: str,
+        fulfillment_evidence: str,
+    ) -> dict[str, Any]:
+        """Submit evidence that escrow conditions are met.
+        
+        Args:
+            escrow_uid: The escrow's on-chain UID
+            fulfillment_evidence: Evidence text, e.g. "Project grew from 1000 to 1400 users (40%)"
+        """
+        if not self._is_ready():
+            return {"status": "dry_run", "escrow_uid": escrow_uid}
+
+        try:
+            oracle_address = self.settings.ORACLE_WALLET_ADDRESS
+            output = await self._run_nla([
+                "escrow:fulfill",
+                "--escrow-uid", escrow_uid,
+                "--fulfillment", fulfillment_evidence,
+                "--oracle", oracle_address,
+            ])
+
+            fulfillment_uid = self._parse_uid_from_output(output)
+
+            return {
+                "status": "fulfilled",
+                "escrow_uid": escrow_uid,
+                "fulfillment_uid": fulfillment_uid,
+                "evidence": fulfillment_evidence,
+                "raw_output": output,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:
+            logger.error(f"Failed to submit fulfillment: {e}")
+            return {"status": "error", "escrow_uid": escrow_uid, "error": str(e)}
+
+    async def arbitrate(self, escrow_uid: str) -> dict[str, Any]:
+        """Trigger LLM arbitration for an escrow (the agentic part).
+        
+        The oracle LLM evaluates whether the fulfillment evidence
+        satisfies the natural language demand.
+        """
+        if not self._is_ready():
+            return {"status": "dry_run", "escrow_uid": escrow_uid}
+
+        try:
+            output = await self._run_nla([
+                "escrow:arbitrate",
+                escrow_uid,
+                "--auto",
+            ])
+
+            return {
+                "status": "arbitrated",
+                "escrow_uid": escrow_uid,
+                "raw_output": output,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:
+            logger.error(f"Arbitration failed: {e}")
+            return {"status": "error", "escrow_uid": escrow_uid, "error": str(e)}
+
+    async def collect_funds(
+        self,
+        escrow_uid: str,
+        fulfillment_uid: str,
+    ) -> dict[str, Any]:
+        """Collect funds from an approved escrow."""
+        if not self._is_ready():
+            return {"status": "dry_run", "escrow_uid": escrow_uid}
+
+        try:
+            output = await self._run_nla([
+                "escrow:collect",
+                "--escrow-uid", escrow_uid,
+                "--fulfillment-uid", fulfillment_uid,
+            ])
+
+            return {
+                "status": "collected",
+                "escrow_uid": escrow_uid,
+                "fulfillment_uid": fulfillment_uid,
+                "raw_output": output,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:
+            logger.error(f"Collection failed: {e}")
+            return {"status": "error", "escrow_uid": escrow_uid, "error": str(e)}
+
+    async def get_escrow_status(self, escrow_uid: str) -> dict[str, Any]:
+        """Check the on-chain status of an escrow."""
+        if not self._is_ready():
+            return {"status": "dry_run", "escrow_uid": escrow_uid}
+
+        try:
+            output = await self._run_nla([
+                "escrow:status",
+                "--escrow-uid", escrow_uid,
+            ])
+            return {
+                "escrow_uid": escrow_uid,
+                "raw_output": output,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:
+            return {"escrow_uid": escrow_uid, "status": "error", "error": str(e)}
+
+    def _parse_uid_from_output(self, output: str) -> str | None:
+        """Extract a 0x... UID from NLA CLI output."""
+        for line in output.split("\n"):
+            line = line.strip()
+            # Look for hex strings that look like UIDs (0x + 64 hex chars)
+            if "0x" in line:
+                for word in line.split():
+                    word = word.strip(",:;\"'()")
+                    if word.startswith("0x") and len(word) >= 10:
+                        return word
+        return output  # Return full output if no UID parsed

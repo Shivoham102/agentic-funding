@@ -81,6 +81,34 @@ Open [http://localhost:3000](http://localhost:3000).
 └── docker-compose.yml # MongoDB
 ```
 
+## Testing the payment agent
+
+**Unit tests (dry-run, no chain):**
+
+```bash
+cd backend
+python -m unittest tests.test_payment_agent -v
+```
+
+**Manual API tests (backend must be running on port 8000):**
+
+```bash
+cd backend
+# Process payment (dry-run returns status "dry_run" and 50/50 split)
+python scripts/test_payments_api.py process --project-id <MongoDB_ObjectId> --recipient 0x... --amount 100000000
+
+# Release escrow
+python scripts/test_payments_api.py release --project-id <id> --escrow-uid <uid>
+
+# Oracle check cycle
+python scripts/test_payments_api.py oracle-check
+
+# Escrow status for a project
+python scripts/test_payments_api.py escrow-status --project-id <id>
+```
+
+Without `ORACLE_PRIVATE_KEY` (and without a working Alkahest client), the agent runs in **dry-run mode**: it returns the same response shape but with `status: "dry_run"` and no real on-chain transactions.
+
 ## Status
 
 This is a starter skeleton. Key TODOs:

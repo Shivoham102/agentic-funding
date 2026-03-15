@@ -1,0 +1,10 @@
+{
+  "name": "deploy-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "alkahest-ts": "0.7.2",
+    "viem": "^2.42.1"
+  }
+}
