@@ -105,6 +105,15 @@ def mock_payment_agent(settings):
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
 
+    agent.direct_transfer = AsyncMock(return_value={
+        "project_id": FAKE_PROJECT_ID,
+        "status": "transferred",
+        "amount": 50_000_000,
+        "recipient_address": "0x47d0079dA447f21bEea09B209BCad84A5d2d2705",
+        "tx_hash": "0xdirect_transfer_hash_1234567890",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+
     agent.get_escrow_status = AsyncMock(return_value={
         "escrow_uid": FAKE_ESCROW_UID,
         "raw_output": "Escrow status: active",
@@ -202,7 +211,7 @@ class TestToolSchemas:
     def test_expected_tools_exist(self):
         names = {t["name"] for t in TOOLS}
         expected = {
-            "get_project", "list_projects", "create_escrow",
+            "get_project", "list_projects", "create_escrow", "direct_transfer",
             "submit_fulfillment", "trigger_arbitration", "collect_funds",
             "check_escrow_status", "update_project_status", "wait_and_fulfill",
         }
@@ -416,6 +425,35 @@ class TestWaitAndFulfill:
         assert store[FAKE_PROJECT_ID]["escrow_info"]["fulfillment_uid"] == FAKE_FULFILLMENT_UID
 
 
+class TestDirectTransfer:
+    @pytest.mark.asyncio
+    async def test_direct_transfer_success(self, funding_agent, mock_payment_agent):
+        result = await funding_agent._execute_tool("direct_transfer", {
+            "project_id": FAKE_PROJECT_ID,
+            "recipient_address": "0x47d0079dA447f21bEea09B209BCad84A5d2d2705",
+            "amount_usdc": 50,
+        })
+        assert result["status"] == "transferred"
+        mock_payment_agent.direct_transfer.assert_called_once_with(
+            project_id=FAKE_PROJECT_ID,
+            recipient_address="0x47d0079dA447f21bEea09B209BCad84A5d2d2705",
+            amount=50_000_000,
+        )
+
+    @pytest.mark.asyncio
+    async def test_direct_transfer_decimal(self, funding_agent, mock_payment_agent):
+        result = await funding_agent._execute_tool("direct_transfer", {
+            "project_id": FAKE_PROJECT_ID,
+            "recipient_address": "0x47d0079dA447f21bEea09B209BCad84A5d2d2705",
+            "amount_usdc": 0.5,
+        })
+        mock_payment_agent.direct_transfer.assert_called_with(
+            project_id=FAKE_PROJECT_ID,
+            recipient_address="0x47d0079dA447f21bEea09B209BCad84A5d2d2705",
+            amount=500_000,
+        )
+
+
 class TestUnknownTool:
     @pytest.mark.asyncio
     async def test_unknown_tool(self, funding_agent):
@@ -427,62 +465,79 @@ class TestUnknownTool:
 # ---- Full Flow Integration Test (no LLM, just tools in sequence) ----
 
 class TestFullFlowNoLLM:
-    """Simulate the complete funding flow by calling tools in sequence, like the agent would."""
+    """Simulate the complete 50/50 funding flow by calling tools in sequence."""
 
     @pytest.mark.asyncio
-    async def test_complete_escrow_lifecycle(self, funding_agent, mock_payment_agent, mock_db):
+    async def test_complete_funding_flow_50_50(self, funding_agent, mock_payment_agent, mock_db):
         _, store = mock_db
 
         # Step 1: Look up the project
         project = await funding_agent._execute_tool("get_project", {"project_id": FAKE_PROJECT_ID})
         assert project["name"] == "TestProject"
         assert project["requested_funding"] == 100
+        recipient = project.get("recipient_wallet", "0x47d0079dA447f21bEea09B209BCad84A5d2d2705")
+        total = project["requested_funding"]
+        direct_amount = total / 2    # 50 USDC
+        escrow_amount = total / 2    # 50 USDC
 
-        # Step 2: Create escrow using requested_funding
+        print(f"\n--- Full 50/50 Funding Flow ---")
+        print(f"Project: {project['name']}")
+        print(f"Total: {total} USDC → Direct: {direct_amount} USDC + Escrow: {escrow_amount} USDC")
+
+        # Step 2: Direct transfer of 50%
+        transfer = await funding_agent._execute_tool("direct_transfer", {
+            "project_id": FAKE_PROJECT_ID,
+            "recipient_address": recipient,
+            "amount_usdc": direct_amount,
+        })
+        assert transfer["status"] == "transferred"
+        print(f"✅ Step 2: Direct transfer of {direct_amount} USDC → tx={transfer['tx_hash'][:16]}...")
+
+        # Step 3: Create escrow for remaining 50% with time-based condition
         escrow = await funding_agent._execute_tool("create_escrow", {
             "project_id": FAKE_PROJECT_ID,
-            "amount_usdc": project["requested_funding"],
+            "amount_usdc": escrow_amount,
             "demand": "Release funds 30 seconds after escrow creation",
         })
         assert escrow["status"] == "created"
         assert escrow["escrow_uid"] == FAKE_ESCROW_UID
+        print(f"✅ Step 3: Escrow created for {escrow_amount} USDC → uid={escrow['escrow_uid'][:16]}...")
 
-        # Step 3: Verify project status updated in DB
-        assert store[FAKE_PROJECT_ID]["status"] == "funded"
-        assert store[FAKE_PROJECT_ID]["escrow_info"]["escrow_uid"] == FAKE_ESCROW_UID
-
-        # Step 4: Wait and fulfill (with 0s wait for test)
+        # Step 4: Wait and submit fulfillment (0s for test, would be 30s in real)
         fulfill = await funding_agent._execute_tool("wait_and_fulfill", {
             "project_id": FAKE_PROJECT_ID,
             "wait_seconds": 0,
             "escrow_created_at": escrow.get("timestamp", "now"),
         })
         assert fulfill["status"] == "fulfilled"
+        print(f"✅ Step 4: Fulfillment submitted → uid={fulfill['fulfillment_uid'][:16]}...")
 
-        # Step 5: Trigger arbitration
+        # Step 5: Trigger LLM arbitration
         arb = await funding_agent._execute_tool("trigger_arbitration", {
             "project_id": FAKE_PROJECT_ID,
         })
         assert arb["status"] == "arbitrated"
+        print(f"✅ Step 5: Arbitration triggered → approved")
 
-        # Step 6: Collect funds
+        # Step 6: Collect escrowed funds
         collect = await funding_agent._execute_tool("collect_funds", {
             "project_id": FAKE_PROJECT_ID,
         })
         assert collect["status"] == "collected"
+        print(f"✅ Step 6: Escrowed funds collected")
 
-        # Step 7: Check final escrow status
-        status = await funding_agent._execute_tool("check_escrow_status", {
+        # Step 7: Update project status
+        status_update = await funding_agent._execute_tool("update_project_status", {
             "project_id": FAKE_PROJECT_ID,
+            "status": "funded",
         })
-        assert status["escrow_uid"] == FAKE_ESCROW_UID
+        assert status_update["updated"] is True
+        print(f"✅ Step 7: Project status → funded")
 
-        print("\n✅ Full escrow lifecycle completed successfully!")
-        print(f"   1. Project looked up: {project['name']}")
-        print(f"   2. Escrow created: {escrow['escrow_uid'][:16]}...")
-        print(f"   3. Fulfillment submitted: {fulfill['fulfillment_uid'][:16]}...")
-        print(f"   4. Arbitration triggered")
-        print(f"   5. Funds collected")
+        # Verify final DB state
+        assert store[FAKE_PROJECT_ID]["status"] == "funded"
+        assert store[FAKE_PROJECT_ID]["escrow_info"]["escrow_uid"] == FAKE_ESCROW_UID
+        print(f"\n✅ Full 50/50 funding flow completed successfully!")
 
 
 # ---- Run directly ----

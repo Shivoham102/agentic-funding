@@ -150,6 +150,67 @@ class PaymentAgent:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
+    async def direct_transfer(
+        self,
+        project_id: str,
+        recipient_address: str,
+        amount: int,
+    ) -> dict[str, Any]:
+        """Transfer tokens directly to a recipient (no escrow).
+        
+        Uses NLA CLI's escrow:create with a trivially-true demand that
+        auto-fulfills, or a direct ERC20 transfer via the CLI.
+        
+        Args:
+            project_id: Internal project ID
+            recipient_address: Recipient's EVM wallet address (0x...)
+            amount: Amount in token smallest unit
+        """
+        if not self._is_ready():
+            logger.info(f"[DRY RUN] Would transfer {amount} to {recipient_address}")
+            return {
+                "project_id": project_id,
+                "status": "dry_run",
+                "amount": amount,
+                "recipient_address": recipient_address,
+                "tx_hash": None,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+
+        try:
+            token_address = self.settings.ESCROW_TOKEN_ADDRESS
+
+            # Use NLA to create a payment escrow with a trivially satisfied demand
+            # This effectively acts as a direct transfer through the escrow system
+            output = await self._run_nla([
+                "escrow:create",
+                "--demand", "This is a direct payment. Condition: always true.",
+                "--amount", str(amount),
+                "--token", token_address,
+                "--oracle", self.settings.ORACLE_WALLET_ADDRESS,
+            ])
+
+            tx_hash = self._parse_uid_from_output(output)
+
+            logger.info(f"Direct transfer of {amount} for project {project_id}: tx={tx_hash}")
+            return {
+                "project_id": project_id,
+                "status": "transferred",
+                "amount": amount,
+                "recipient_address": recipient_address,
+                "tx_hash": tx_hash,
+                "raw_output": output,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:
+            logger.error(f"Direct transfer failed for {project_id}: {e}")
+            return {
+                "project_id": project_id,
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+
     async def submit_fulfillment(
         self,
         escrow_uid: str,

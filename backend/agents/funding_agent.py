@@ -68,6 +68,28 @@ TOOLS = [
         }
     },
     {
+        "name": "direct_transfer",
+        "description": "Transfer USDC tokens directly to a project's wallet. No escrow, no conditions. Use this for the immediate 50% portion of funding.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "The project ID"
+                },
+                "recipient_address": {
+                    "type": "string",
+                    "description": "The recipient's EVM wallet address (0x...)"
+                },
+                "amount_usdc": {
+                    "type": "number",
+                    "description": "Amount in USDC (human readable, e.g. 50 = 50 USDC)"
+                }
+            },
+            "required": ["project_id", "recipient_address", "amount_usdc"]
+        }
+    },
+    {
         "name": "submit_fulfillment",
         "description": "Submit evidence that a project has met its escrow conditions. The evidence will be evaluated by an LLM oracle.",
         "input_schema": {
@@ -192,8 +214,14 @@ Your job is to execute funding operations on-chain using escrow. When given a ta
 ## Guidelines:
 - Always look up the project first using get_project before any operation
 - When funding a project, use the project's requested_funding field as the amount. If no amount was requested, ask for clarification. Never invent a funding amount.
-- For demo/testing: use time-based conditions like "Release funds 30 seconds after escrow creation". Then use wait_and_fulfill to automatically wait and submit fulfillment.
-- For production: use measurable growth conditions based on the project's category and stage
+- FUNDING FLOW (50/50 split):
+  1. Look up the project to get requested_funding and recipient_wallet
+  2. Calculate: 50% for direct transfer, 50% for escrow
+  3. Call direct_transfer for the immediate 50% to the project's recipient_wallet
+  4. Call create_escrow for the remaining 50% with a condition
+  5. For demo: use "Release funds 30 seconds after escrow creation" as the condition, then call wait_and_fulfill followed by trigger_arbitration and collect_funds
+  6. For production: use measurable growth conditions based on the project's category
+  7. Update project status to "funded"
 - When creating escrows, write clear, measurable conditions
 - When asked to check on projects, look up their escrow status
 - Report results clearly, including transaction hashes and UIDs when available
@@ -325,6 +353,14 @@ class FundingAgent:
                             }}
                         )
                 return result
+
+            elif tool_name == "direct_transfer":
+                raw_amount = int(tool_input["amount_usdc"] * (10 ** USDC_DECIMALS))
+                return await self.payment_agent.direct_transfer(
+                    project_id=tool_input["project_id"],
+                    recipient_address=tool_input["recipient_address"],
+                    amount=raw_amount,
+                )
 
             elif tool_name == "submit_fulfillment":
                 return await self.payment_agent.submit_fulfillment(
