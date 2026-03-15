@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pymongo import DESCENDING, ReturnDocument
 
 from agents.data_collector import DataCollectorAgent
+from agents.decision import DecisionReviewAgent
 from agents.evaluation import EvaluationAgent
 from agents.feature_extraction import FeatureExtractionAgent
 from agents.funding_decision import FundingDecisionAgent
@@ -25,6 +26,7 @@ router = APIRouter(prefix="/api/projects", tags=["projects"])
 evaluation_agent = EvaluationAgent()
 feature_extraction_agent = FeatureExtractionAgent(node_executable=settings.SCORING_NODE_EXECUTABLE)
 treasury_agent = TreasuryManagementAgent()
+decision_review_agent = DecisionReviewAgent(node_executable=settings.DECISION_NODE_EXECUTABLE)
 funding_decision_agent = FundingDecisionAgent(treasury_agent)
 data_collector_agent = DataCollectorAgent(
     unbrowse_api_key=settings.UNBROWSE_API_KEY,
@@ -135,12 +137,24 @@ async def _run_review_pipeline(project_doc: dict) -> dict:
     feature_vector = scoring_review["features"]
     scorecard = scoring_review["scorecard"]
     funding_package_draft = scoring_review["funding_package_draft"]
+    decision_review = decision_review_agent.review(
+        project=project_doc,
+        scorecard=scorecard,
+        funding_package_draft=funding_package_draft,
+        treasury_snapshot=treasury_snapshot.model_dump(mode="json"),
+        approved_projects=approved_projects,
+    )
+    decision_package = decision_review.get("decision_package")
+    verifier_result = decision_review.get("verifier_result")
 
     evaluation_input = {
         **project_doc,
         "feature_vector": feature_vector,
         "scorecard": scorecard,
         "funding_package_draft": funding_package_draft,
+        "decision_package": decision_package,
+        "verifier_result": verifier_result,
+        "decision_review": decision_review,
     }
     evaluation = evaluation_agent.evaluate_project(evaluation_input)
     funding_decision, treasury_allocation, status = funding_decision_agent.decide(
@@ -157,6 +171,9 @@ async def _run_review_pipeline(project_doc: dict) -> dict:
         "feature_vector": feature_vector,
         "scorecard": scorecard,
         "funding_package_draft": funding_package_draft,
+        "decision_package": decision_package,
+        "verifier_result": verifier_result,
+        "decision_review": decision_review,
         "evaluation": evaluation.model_dump(mode="json"),
         "funding_decision": funding_decision.model_dump(mode="json"),
         "treasury_allocation": treasury_allocation.model_dump(mode="json"),
@@ -188,6 +205,9 @@ async def create_project(project: ProjectCreate) -> ProjectResponse:
         "feature_vector": None,
         "scorecard": None,
         "funding_package_draft": None,
+        "decision_package": None,
+        "verifier_result": None,
+        "decision_review": None,
         "evaluation": None,
         "funding_decision": None,
         "treasury_allocation": None,

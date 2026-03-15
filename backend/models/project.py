@@ -201,6 +201,9 @@ class ProjectUpdate(BaseModel):
     feature_vector: Optional[dict[str, Any]] = None
     scorecard: Optional[dict[str, Any]] = None
     funding_package_draft: Optional[dict[str, Any]] = None
+    decision_package: Optional[dict[str, Any]] = None
+    verifier_result: Optional[dict[str, Any]] = None
+    decision_review: Optional[dict[str, Any]] = None
     escrow_info: Optional[EscrowInfo] = None
     evaluation: Optional[EvaluationResult] = None
     treasury_allocation: Optional[TreasuryAllocation] = None
@@ -218,6 +221,9 @@ class ProjectInDB(ProjectCreate):
     feature_vector: Optional[dict[str, Any]] = None
     scorecard: Optional[dict[str, Any]] = None
     funding_package_draft: Optional[dict[str, Any]] = None
+    decision_package: Optional[dict[str, Any]] = None
+    verifier_result: Optional[dict[str, Any]] = None
+    decision_review: Optional[dict[str, Any]] = None
     escrow_info: Optional[EscrowInfo] = None
     evaluation: Optional[EvaluationResult] = None
     treasury_allocation: Optional[TreasuryAllocation] = None

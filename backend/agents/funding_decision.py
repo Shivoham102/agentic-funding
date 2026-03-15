@@ -37,6 +37,24 @@ class FundingDecisionAgent:
         evaluation: EvaluationResult,
         approved_projects: list[dict[str, Any]],
     ) -> tuple[FundingDecision, TreasuryAllocation, ProjectStatus]:
+        decision_package = self._as_dict(project.get("decision_package"))
+        verifier_result = self._as_dict(project.get("verifier_result"))
+        if decision_package.get("schema_version") == "decision-v1":
+            if verifier_result.get("passed") is True:
+                return self._decide_from_verified_decision_package(
+                    project=project,
+                    evaluation=evaluation,
+                    approved_projects=approved_projects,
+                    decision_package=decision_package,
+                    verifier_result=verifier_result,
+                )
+            return self._reject_from_verifier_failure(
+                project=project,
+                evaluation=evaluation,
+                approved_projects=approved_projects,
+                verifier_result=verifier_result,
+            )
+
         funding_package_draft = self._as_dict(project.get("funding_package_draft"))
         if funding_package_draft.get("schema_version") == "funding-package-v1":
             return self._decide_from_package_draft(
@@ -224,6 +242,118 @@ class FundingDecisionAgent:
         )
         return decision, treasury_allocation, ProjectStatus.funded
 
+    def _decide_from_verified_decision_package(
+        self,
+        project: dict[str, Any],
+        evaluation: EvaluationResult,
+        approved_projects: list[dict[str, Any]],
+        decision_package: dict[str, Any],
+        verifier_result: dict[str, Any],
+    ) -> tuple[FundingDecision, TreasuryAllocation, ProjectStatus]:
+        requested_amount = self._to_float(project.get("requested_funding"))
+        approved_amount = self._to_float(decision_package.get("approved_amount"))
+        decision_label = str(decision_package.get("decision") or "").strip().lower()
+        decision_type = (
+            FundingDecisionType(decision_label)
+            if decision_label in {item.value for item in FundingDecisionType}
+            else FundingDecisionType.reject
+        )
+
+        if decision_type == FundingDecisionType.reject or approved_amount <= 0:
+            funding_package = self._empty_package(requested_amount)
+            decision = FundingDecision(
+                decision=FundingDecisionType.reject,
+                rationale="Proposal is rejected because the verified agentic package does not authorize a positive commitment.",
+                policy_explanation=self._policy_explanation_from_verified_package(
+                    evaluation,
+                    decision_package,
+                    verifier_result,
+                ),
+                funding_package=funding_package,
+                milestone_schedule=[],
+            )
+            return decision, self.treasury_agent.summarize_portfolio(approved_projects), ProjectStatus.rejected
+
+        milestone_schedule = self._materialize_schedule_from_decision_package(decision_package)
+        treasury_allocation = self.treasury_agent.summarize_portfolio(
+            approved_projects,
+            [item.model_dump(mode="json") for item in milestone_schedule],
+        )
+        if not treasury_allocation.policy_compliant:
+            funding_package = self._empty_package(requested_amount)
+            decision = FundingDecision(
+                decision=FundingDecisionType.reject,
+                rationale="Verified package is rejected because the materialized milestone schedule violates treasury reserve policy.",
+                policy_explanation=self._policy_explanation_from_verified_package(
+                    evaluation,
+                    decision_package,
+                    {
+                        **verifier_result,
+                        "violation_codes": self._string_list(verifier_result.get("violation_codes"))
+                        + ["TREASURY_POLICY_VIOLATION"],
+                    },
+                ),
+                funding_package=funding_package,
+                milestone_schedule=[],
+            )
+            return decision, treasury_allocation, ProjectStatus.rejected
+
+        funding_package = FundingPackage(
+            requested_amount=round(requested_amount, 2),
+            recommended_amount=round(approved_amount, 2),
+            approved_amount=round(approved_amount, 2),
+            reduction_ratio=self._reduction_ratio(requested_amount, approved_amount),
+            immediate_release_amount=round(milestone_schedule[0].release_amount if milestone_schedule else 0.0, 2),
+            escrow_amount=round(sum(item.release_amount for item in milestone_schedule[1:]), 2),
+        )
+        decision = FundingDecision(
+            decision=decision_type,
+            rationale=str(decision_package.get("rationale") or "").strip()
+            or (
+                "Proposal is approved because the verified agentic package passed policy checks."
+                if decision_type == FundingDecisionType.accept
+                else "Proposal is approved with reduced funding because the verified agentic package recommends a smaller commitment."
+            ),
+            policy_explanation=self._policy_explanation_from_verified_package(
+                evaluation,
+                decision_package,
+                verifier_result,
+            ),
+            funding_package=funding_package,
+            milestone_schedule=milestone_schedule,
+        )
+        return decision, treasury_allocation, ProjectStatus.funded
+
+    def _reject_from_verifier_failure(
+        self,
+        project: dict[str, Any],
+        evaluation: EvaluationResult,
+        approved_projects: list[dict[str, Any]],
+        verifier_result: dict[str, Any],
+    ) -> tuple[FundingDecision, TreasuryAllocation, ProjectStatus]:
+        requested_amount = self._to_float(project.get("requested_funding"))
+        funding_package = self._empty_package(requested_amount)
+        violation_codes = self._string_list(verifier_result.get("violation_codes"))
+        policy_explanation = [
+            f"Overall score {evaluation.overall_score}/100 with {evaluation.confidence_level.value} confidence.",
+            f"Risk classified as {evaluation.risk_classification.value}.",
+            "Agentic package failed formal policy verification, so execution is blocked.",
+        ]
+        if violation_codes:
+            policy_explanation.append(
+                "Verifier violation codes: "
+                + ", ".join(code.replace("_", " ").lower() for code in violation_codes[:6])
+                + "."
+            )
+        decision = FundingDecision(
+            decision=FundingDecisionType.reject,
+            rationale="Proposal is rejected because the agentic recommendation did not pass formal policy verification.",
+            policy_explanation=policy_explanation,
+            funding_package=funding_package,
+            milestone_schedule=[],
+        )
+        return decision, self.treasury_agent.summarize_portfolio(approved_projects), ProjectStatus.rejected
+
     def _build_schedule_template(self, project: dict[str, Any], stage: str) -> list[dict[str, Any]]:
         requested_milestones = project.get("requested_milestones") or []
         if isinstance(requested_milestones, list) and requested_milestones:
@@ -393,6 +523,36 @@ class FundingDecisionAgent:
             )
         return schedule
 
+    def _materialize_schedule_from_decision_package(
+        self,
+        decision_package: dict[str, Any],
+    ) -> list[MilestoneScheduleItem]:
+        approved_amount = self._to_float(decision_package.get("approved_amount"))
+        milestones = decision_package.get("milestones") or []
+        if not isinstance(milestones, list) or approved_amount <= 0:
+            return []
+
+        schedule: list[MilestoneScheduleItem] = []
+        for raw_item in milestones:
+            if not isinstance(raw_item, dict):
+                continue
+            release_amount = round(self._to_float(raw_item.get("amount")), 2)
+            verification_type = self._verification_type_from_draft(raw_item.get("verification_method"))
+            deliverable_type = str(raw_item.get("deliverable_type") or f"milestone_{len(schedule) + 1}")
+            schedule.append(
+                MilestoneScheduleItem(
+                    sequence=len(schedule) + 1,
+                    name=self._humanize_label(deliverable_type),
+                    description=f"Deliver {self._humanize_label(deliverable_type).lower()} and verify via {verification_type.value.replace('_', ' ')}.",
+                    target_days=self._target_days_from_deadline(raw_item.get("deadline")),
+                    verification_type=verification_type,
+                    success_metric=self._success_metric(deliverable_type, verification_type),
+                    release_percentage=round(release_amount / approved_amount, 4),
+                    release_amount=release_amount,
+                )
+            )
+        return schedule
+
     def _verification_type(self, name: Any, description: Any) -> MilestoneVerificationType:
         text = f"{name or ''} {description or ''}".lower()
         if any(keyword in text for keyword in ["deploy", "launch", "production"]):
@@ -480,5 +640,37 @@ class FundingDecisionAgent:
         if rationale_codes:
             explanation.append(
                 "Package rationale codes: " + ", ".join(code.replace("_", " ").lower() for code in rationale_codes[:4]) + "."
+            )
+        return explanation
+
+    def _policy_explanation_from_verified_package(
+        self,
+        evaluation: EvaluationResult,
+        decision_package: dict[str, Any],
+        verifier_result: dict[str, Any],
+    ) -> list[str]:
+        explanation = [
+            f"Overall score {evaluation.overall_score}/100 with {evaluation.confidence_level.value} confidence.",
+            f"Risk classified as {evaluation.risk_classification.value}.",
+            f"Verified decision recommends ${self._to_float(decision_package.get('approved_amount')):,.0f}.",
+        ]
+        score_inputs_used = self._string_list(decision_package.get("score_inputs_used"))
+        if score_inputs_used:
+            explanation.append("Decision used score inputs: " + ", ".join(score_inputs_used[:6]) + ".")
+        uncertainty_flags = self._string_list(decision_package.get("uncertainty_flags"))
+        if uncertainty_flags:
+            explanation.append(
+                "Uncertainty flags: "
+                + ", ".join(flag.replace("_", " ").lower() for flag in uncertainty_flags[:5])
+                + "."
+            )
+        violation_codes = self._string_list(verifier_result.get("violation_codes"))
+        if verifier_result.get("passed") is True:
+            explanation.append("Formal policy verification passed before execution.")
+        elif violation_codes:
+            explanation.append(
+                "Formal verification blocked execution with codes: "
+                + ", ".join(code.replace("_", " ").lower() for code in violation_codes[:6])
+                + "."
             )
         return explanation
