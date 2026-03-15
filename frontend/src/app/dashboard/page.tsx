@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 interface TreasurySnapshot {
@@ -31,6 +32,8 @@ interface Project {
   id: string;
   name: string;
   website_url: string;
+  github_url?: string;
+  recipient_wallet?: string;
   short_description?: string;
   description?: string;
   category: string;
@@ -41,6 +44,15 @@ interface Project {
   stage?: string;
   evaluation?: EvaluationSummary;
   funding_decision?: FundingDecision;
+  enriched_data?: {
+    website_scraped?: boolean;
+    github_scraped?: boolean;
+    wallet_scraped?: boolean;
+    market_intelligence_applied?: boolean;
+  };
+  verifier_result?: {
+    passed?: boolean;
+  };
 }
 
 function formatCurrency(amount: number | undefined) {
@@ -352,11 +364,42 @@ export default function DashboardPage() {
                       {labelize(project.category)}
                     </span>
                     {project.stage && <StageBadge stage={project.stage} />}
+                    {project.enriched_data?.website_scraped && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]">
+                        Website evidence
+                      </span>
+                    )}
+                    {project.enriched_data?.github_scraped && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]">
+                        GitHub evidence
+                      </span>
+                    )}
+                    {project.enriched_data?.wallet_scraped && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]">
+                        Wallet evidence
+                      </span>
+                    )}
+                    {project.enriched_data?.market_intelligence_applied && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]">
+                        Market intel
+                      </span>
+                    )}
+                    {project.verifier_result?.passed !== undefined && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]">
+                        {project.verifier_result.passed ? "Verifier pass" : "Verifier fail"}
+                      </span>
+                    )}
                     {milestoneCount > 0 && (
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]">
                         {milestoneCount} milestones
                       </span>
                     )}
+                    <Link
+                      href={`/status?q=${encodeURIComponent(project.id)}`}
+                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-[var(--border)] bg-[var(--surface)] text-[var(--violet)] transition-colors hover:text-[var(--blue)]"
+                    >
+                      Open full review
+                    </Link>
                     {project.requested_funding !== undefined && (
                       <span className="ml-auto text-xs text-[var(--text-muted)]">
                         Requested {formatCurrency(project.requested_funding)}

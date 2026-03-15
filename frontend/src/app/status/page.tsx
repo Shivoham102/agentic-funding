@@ -1,7 +1,21 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
 import Link from "next/link";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
+
+interface BudgetLineItem {
+  category: string;
+  amount: number;
+  notes?: string;
+}
+
+interface FounderMilestone {
+  name: string;
+  description: string;
+  target_days?: number;
+  requested_release_ratio?: number;
+}
 
 interface FundingPackage {
   requested_amount?: number;
@@ -17,13 +31,24 @@ interface Milestone {
   description: string;
   target_days: number;
   verification_type: string;
+  success_metric?: string;
+  release_percentage?: number;
   release_amount: number;
 }
 
 interface EvaluationSummary {
   overall_score: number;
   confidence_level: string;
+  confidence_score?: number;
   risk_classification: string;
+  risk_score?: number;
+  data_completeness?: number;
+  evidence_coverage?: number;
+  recommended_funding_amount?: number;
+  recommended_allocation_ratio?: number;
+  strengths?: string[];
+  concerns?: string[];
+  policy_notes?: string[];
 }
 
 interface ScoreBreakdown {
@@ -36,18 +61,26 @@ interface ScoreBreakdown {
 }
 
 interface Scorecard {
+  schema_version?: string;
   overall_score: number;
   confidence?: number;
+  confidence_level?: number;
   risk_classification?: string;
   reason_codes?: string[];
   subscores?: ScoreBreakdown;
+  dimension_reason_codes?: Record<string, string[]>;
   risk_band?: {
+    label?: string;
     score?: number;
     reason_codes?: string[];
   };
+  owner_preferences_used?: Record<string, number>;
+  proposal_context?: Record<string, unknown>;
   missingness_summary?: {
     thin_evidence_categories?: string[];
+    [key: string]: unknown;
   };
+  [key: string]: unknown;
 }
 
 interface FundingDecision {
@@ -58,6 +91,25 @@ interface FundingDecision {
   policy_explanation?: string[];
 }
 
+interface FundingPackageDraftMilestone {
+  amount_usd?: number;
+  deliverable_type?: string;
+  verification_method?: string;
+  deadline?: string;
+  [key: string]: unknown;
+}
+
+interface FundingPackageDraft {
+  schema_version?: string;
+  recommendation_label?: string;
+  requested_amount_usd?: number;
+  recommended_amount_usd?: number;
+  treasury_capacity_usd?: number;
+  rationale_codes?: string[];
+  milestones?: FundingPackageDraftMilestone[];
+  [key: string]: unknown;
+}
+
 interface DecisionPackageMilestone {
   amount: number;
   deliverable_type: string;
@@ -66,6 +118,7 @@ interface DecisionPackageMilestone {
 }
 
 interface DecisionPackage {
+  schema_version?: string;
   decision: string;
   approved_amount: number;
   milestones: DecisionPackageMilestone[];
@@ -91,6 +144,7 @@ interface VerifierCheck {
 }
 
 interface VerifierResult {
+  schema_version?: string;
   passed: boolean;
   approved_for_execution?: boolean;
   violation_codes?: string[];
@@ -100,10 +154,13 @@ interface VerifierResult {
 }
 
 interface DecisionReview {
+  schema_version?: string;
   approved_for_execution?: boolean;
   agent_mode_used?: string;
   revision_attempts?: number;
   warnings?: string[];
+  attempts?: Array<Record<string, unknown>>;
+  [key: string]: unknown;
 }
 
 interface TreasuryStrategyAllocation {
@@ -127,30 +184,94 @@ interface TreasuryAllocation {
 }
 
 interface EvidenceSource {
+  id?: string;
+  kind?: string;
+  label?: string;
+  category?: string;
+  url?: string;
+  provider?: string;
   source_type?: string;
   source_id?: string;
   invocation_id?: string;
-  url?: string;
-  provider?: string;
+  observed_at?: string;
+  endpoint?: string;
+  method?: string;
+  request_signature?: string;
+  raw_payload_hash?: string;
+  metadata?: Record<string, unknown>;
+}
+
+interface EvidenceFact {
+  id?: string;
+  category?: string;
+  key?: string;
+  claim?: string;
+  value?: unknown;
+  observed_at?: string;
+  support_status?: string;
+  contradiction_flags?: string[];
+  confidence?: number;
+  freshness_days?: number;
 }
 
 interface EvidenceBundle {
-  facts?: Array<Record<string, unknown>>;
+  facts?: EvidenceFact[];
   sources?: EvidenceSource[];
   confidence?: {
     overall?: number;
   };
   contradiction_flags?: string[];
   raw_payload_hash?: string;
-  support_summary?: Record<string, number>;
-  freshness_summary?: {
-    stale_fact_count?: number;
+}
+
+interface ClaimAssessment {
+  category?: string;
+  claim?: string;
+  status?: string;
+  support_status?: string;
+  contradiction_flags?: string[];
+  rationale?: string;
+  evidence_ids?: string[];
+  [key: string]: unknown;
+}
+
+interface FeatureVector {
+  schema_version?: string;
+  extracted_at?: string;
+  numeric?: Record<string, number>;
+  boolean_flags?: Record<string, boolean | number>;
+  categorical?: Record<string, string>;
+  coverage?: Record<string, number>;
+  missingness_map?: Record<string, boolean>;
+  missingness_summary?: {
+    thin_evidence_categories?: string[];
+    [key: string]: unknown;
   };
+  [key: string]: unknown;
 }
 
 interface EnrichedData {
+  project_name?: string;
+  generated_at?: string;
+  website_scraped?: boolean;
+  github_scraped?: boolean;
+  wallet_scraped?: boolean;
+  portfolio_context_applied?: boolean;
+  market_intelligence_applied?: boolean;
+  metrics?: Record<string, unknown>;
+  raw_data?: Record<string, unknown>;
+  evidence_sources?: EvidenceSource[];
   evidence_bundle?: EvidenceBundle;
   notes?: string[];
+  web_targets?: Array<Record<string, unknown>>;
+  support_summary?: Record<string, number>;
+  freshness_summary?: {
+    stale_fact_count?: number;
+    [key: string]: unknown;
+  };
+  claim_assessments?: ClaimAssessment[];
+  market_intelligence_report?: Record<string, unknown> | null;
+  market_intelligence_cache?: Record<string, unknown> | null;
 }
 
 interface Project {
@@ -158,16 +279,29 @@ interface Project {
   name: string;
   website_url: string;
   short_description?: string;
+  description?: string;
   category: string;
   status: string;
   ranking_score?: number;
   funding_amount?: number;
   created_at?: string;
+  updated_at?: string;
+  reviewed_at?: string;
   stage?: string;
+  team_size?: number;
+  requested_funding?: number;
+  github_url?: string;
   recipient_wallet?: string;
+  team_background?: string;
+  market_summary?: string;
+  traction_summary?: string;
+  budget_breakdown?: BudgetLineItem[];
+  requested_milestones?: FounderMilestone[];
   evaluation?: EvaluationSummary;
   enriched_data?: EnrichedData;
+  feature_vector?: FeatureVector;
   scorecard?: Scorecard;
+  funding_package_draft?: FundingPackageDraft;
   decision_package?: DecisionPackage;
   verifier_result?: VerifierResult;
   decision_review?: DecisionReview;
@@ -201,13 +335,16 @@ function getStepIndex(status: string): number {
   }
 }
 
-function formatDate(dateString: string): string {
+function formatDate(dateString: string | undefined): string {
+  if (!dateString) return "N/A";
   try {
     const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
+    return date.toLocaleString("en-US", {
       year: "numeric",
-      month: "long",
+      month: "short",
       day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
     });
   } catch {
     return dateString;
@@ -215,7 +352,7 @@ function formatDate(dateString: string): string {
 }
 
 function formatCurrency(amount: number | undefined): string {
-  if (amount === undefined) return "N/A";
+  if (amount === undefined || Number.isNaN(amount)) return "N/A";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -223,9 +360,19 @@ function formatCurrency(amount: number | undefined): string {
   }).format(amount);
 }
 
+function formatNumber(value: number | undefined, digits = 2): string {
+  if (value === undefined || Number.isNaN(value)) return "N/A";
+  return value.toFixed(digits);
+}
+
 function formatPercent(value: number | undefined, fractionDigits = 0): string {
   if (value === undefined || Number.isNaN(value)) return "N/A";
   return `${(value * 100).toFixed(fractionDigits)}%`;
+}
+
+function formatPercentValue(value: number | undefined, fractionDigits = 0): string {
+  if (value === undefined || Number.isNaN(value)) return "N/A";
+  return `${value.toFixed(fractionDigits)}%`;
 }
 
 function labelize(value: string | undefined): string {
@@ -248,7 +395,15 @@ function shortenHash(value: string | undefined): string {
 }
 
 function sourceLabel(source: EvidenceSource, index: number): string {
-  return labelize(source.source_type || source.provider || source.source_id || source.invocation_id || `source_${index + 1}`);
+  return labelize(
+    source.label ||
+      source.kind ||
+      source.source_type ||
+      source.provider ||
+      source.source_id ||
+      source.invocation_id ||
+      `source_${index + 1}`,
+  );
 }
 
 function sourceHref(source: EvidenceSource): string | null {
@@ -257,6 +412,112 @@ function sourceHref(source: EvidenceSource): string | null {
 
 function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
+}
+
+function filterProjects(projects: Project[], query: string): Project[] {
+  const searchTerm = query.trim().toLowerCase();
+  if (!searchTerm) return [];
+  return projects.filter((project) =>
+    [
+      project.id,
+      project.name,
+      project.website_url,
+      project.github_url,
+      project.recipient_wallet,
+    ]
+      .filter(Boolean)
+      .some((field) => String(field).toLowerCase().includes(searchTerm)),
+  );
+}
+
+function primitiveMetricEntries(
+  record: Record<string, unknown> | undefined,
+  keys?: string[],
+): Array<[string, string]> {
+  if (!record) return [];
+  const entries = keys
+    ? keys
+        .filter((key) => key in record)
+        .map((key) => [key, record[key]] as const)
+    : Object.entries(record);
+  return entries
+    .filter(([, value]) =>
+      ["string", "number", "boolean"].includes(typeof value),
+    )
+    .map(([key, value]) => [key, String(value)]);
+}
+
+function JsonBlock({
+  value,
+  emptyMessage,
+}: {
+  value: unknown;
+  emptyMessage: string;
+}) {
+  if (
+    value === undefined ||
+    value === null ||
+    (typeof value === "object" && Object.keys(value as object).length === 0)
+  ) {
+    return <p className="text-sm text-[var(--text-muted)]">{emptyMessage}</p>;
+  }
+
+  return (
+    <pre className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-4 text-xs leading-6 text-[var(--text-secondary)]">
+      {formatJson(value)}
+    </pre>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
+      <p className="mb-1 text-[11px] text-[var(--text-muted)]">{label}</p>
+      <div className="text-base font-semibold text-white">{value}</div>
+    </div>
+  );
+}
+
+function Badge({
+  children,
+  tone = "neutral",
+}: {
+  children: ReactNode;
+  tone?: "neutral" | "success" | "warning" | "danger";
+}) {
+  const palette = {
+    neutral: {
+      background: "rgba(255,255,255,0.04)",
+      color: "var(--text-secondary)",
+    },
+    success: {
+      background: "rgba(34,197,94,0.15)",
+      color: "var(--success)",
+    },
+    warning: {
+      background: "rgba(234,179,8,0.15)",
+      color: "var(--warning)",
+    },
+    danger: {
+      background: "rgba(239,68,68,0.15)",
+      color: "var(--error)",
+    },
+  }[tone];
+
+  return (
+    <span
+      className="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium"
+      style={palette}
+    >
+      {children}
+    </span>
+  );
 }
 
 function DetailPanel({
@@ -271,10 +532,14 @@ function DetailPanel({
   className?: string;
 }) {
   return (
-    <div className={`rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 ${className}`.trim()}>
+    <div
+      className={`rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 ${className}`.trim()}
+    >
       <div className="mb-4">
         <p className="text-sm font-semibold text-white">{title}</p>
-        {subtitle && <p className="text-xs text-[var(--text-muted)] mt-1">{subtitle}</p>}
+        {subtitle && (
+          <p className="mt-1 text-xs text-[var(--text-muted)]">{subtitle}</p>
+        )}
       </div>
       {children}
     </div>
@@ -285,48 +550,66 @@ function StatusTimeline({ status }: { status: string }) {
   const currentIndex = getStepIndex(status);
 
   return (
-    <div className="flex items-center w-full gap-0">
+    <div className="flex w-full items-center gap-0">
       {STATUS_STEPS.map((step, i) => {
         const isCompleted = i <= currentIndex;
         const isCurrent = i === currentIndex;
         return (
-          <div key={step} className="flex items-center flex-1 last:flex-none">
+          <div key={step} className="flex flex-1 items-center last:flex-none">
             <div className="flex flex-col items-center">
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 transition-all ${
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-all ${
                   isCompleted
                     ? "text-white"
-                    : "border border-[var(--border-hover)] text-[var(--text-muted)] bg-transparent"
+                    : "border border-[var(--border-hover)] bg-transparent text-[var(--text-muted)]"
                 }${isCurrent ? " shadow-[0_0_12px_rgba(139,92,246,0.5)]" : ""}`}
                 style={
                   isCompleted
-                    ? { background: "linear-gradient(135deg, var(--violet), var(--blue))" }
+                    ? {
+                        background:
+                          "linear-gradient(135deg, var(--violet), var(--blue))",
+                      }
                     : undefined
                 }
               >
                 {isCompleted ? (
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
                 ) : (
                   i + 1
                 )}
               </div>
               <span
-                className={`text-[10px] mt-1.5 whitespace-nowrap ${
-                  isCompleted ? "text-[var(--text-secondary)]" : "text-[var(--text-muted)]"
+                className={`mt-1.5 whitespace-nowrap text-[10px] ${
+                  isCompleted
+                    ? "text-[var(--text-secondary)]"
+                    : "text-[var(--text-muted)]"
                 }`}
               >
                 {STATUS_LABELS[step]}
               </span>
             </div>
             {i < STATUS_STEPS.length - 1 && (
-              <div className="flex-1 mx-1.5">
+              <div className="mx-1.5 flex-1">
                 <div
-                  className="h-0.5 w-full rounded-full mb-5"
+                  className="mb-5 h-0.5 w-full rounded-full"
                   style={
                     i < currentIndex
-                      ? { background: "linear-gradient(90deg, var(--violet), var(--blue))" }
+                      ? {
+                          background:
+                            "linear-gradient(90deg, var(--violet), var(--blue))",
+                        }
                       : { background: "var(--border)" }
                   }
                 />
@@ -339,16 +622,1442 @@ function StatusTimeline({ status }: { status: string }) {
   );
 }
 
-export default function StatusPage() {
-  const [query, setQuery] = useState("");
+function ProjectCard({
+  project,
+  apiUrl,
+  onProjectUpdated,
+}: {
+  project: Project;
+  apiUrl: string;
+  onProjectUpdated: (project: Project) => void;
+}) {
+  const [draftFields, setDraftFields] = useState({
+    website_url: project.website_url || "",
+    github_url: project.github_url || "",
+    recipient_wallet: project.recipient_wallet || "",
+  });
+  const [activeAction, setActiveAction] = useState<
+    "save" | "enrich" | "review" | "refresh" | null
+  >(null);
+  const [actionMessage, setActionMessage] = useState("");
+  const [actionError, setActionError] = useState("");
+
+  useEffect(() => {
+    setDraftFields({
+      website_url: project.website_url || "",
+      github_url: project.github_url || "",
+      recipient_wallet: project.recipient_wallet || "",
+    });
+  }, [project.id, project.website_url, project.github_url, project.recipient_wallet]);
+
+  const runAction = async (
+    action: "save" | "enrich" | "review" | "refresh",
+  ) => {
+    setActiveAction(action);
+    setActionError("");
+    setActionMessage("");
+
+    try {
+      let response: Response;
+
+      if (action === "save") {
+        response = await fetch(`${apiUrl}/api/projects/${project.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            website_url: draftFields.website_url.trim(),
+            github_url: draftFields.github_url.trim() || null,
+            recipient_wallet: draftFields.recipient_wallet.trim() || null,
+          }),
+        });
+      } else if (action === "enrich") {
+        response = await fetch(`${apiUrl}/api/projects/${project.id}/enrich`, {
+          method: "POST",
+        });
+      } else if (action === "review") {
+        response = await fetch(`${apiUrl}/api/projects/${project.id}/review`, {
+          method: "POST",
+        });
+      } else {
+        response = await fetch(`${apiUrl}/api/projects/${project.id}`);
+      }
+
+      if (!response.ok) {
+        throw new Error(`Request failed with ${response.status}`);
+      }
+
+      const updatedProject = (await response.json()) as Project;
+      onProjectUpdated(updatedProject);
+      setActionMessage(
+        action === "save"
+          ? "Project inputs updated."
+          : action === "enrich"
+            ? "Live enrichment completed and review reran."
+            : action === "review"
+              ? "Deterministic review reran."
+              : "Project reloaded from the backend.",
+      );
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : "Action failed unexpectedly.",
+      );
+    } finally {
+      setActiveAction(null);
+    }
+  };
+
+  const decision = project.funding_decision?.decision;
+  const fundingPackage = project.funding_decision?.funding_package;
+  const milestones = project.funding_decision?.milestone_schedule ?? [];
+  const evidenceBundle = project.enriched_data?.evidence_bundle;
+  const evidenceFacts = evidenceBundle?.facts ?? [];
+  const evidenceSources = evidenceBundle?.sources ?? [];
+  const supportSummary =
+    project.enriched_data?.support_summary ?? project.enriched_data?.metrics ?? {};
+  const staleFactCount =
+    project.enriched_data?.freshness_summary?.stale_fact_count;
+  const thinEvidenceCategories =
+    project.scorecard?.missingness_summary?.thin_evidence_categories ??
+    project.feature_vector?.missingness_summary?.thin_evidence_categories ??
+    [];
+  const verifierViolations = project.verifier_result?.violations ?? [];
+  const failedChecks =
+    project.verifier_result?.check_results?.filter((check) => !check.passed) ?? [];
+  const strategyAllocations =
+    project.treasury_allocation?.strategy_allocations ?? [];
+  const treasuryNotes = project.treasury_allocation?.notes ?? [];
+  const budgetItems = project.budget_breakdown ?? [];
+  const founderMilestones = project.requested_milestones ?? [];
+  const claimAssessments = project.enriched_data?.claim_assessments ?? [];
+  const marketReport = project.enriched_data?.market_intelligence_report;
+  const marketMetrics = primitiveMetricEntries(project.enriched_data?.metrics, [
+    "market_intelligence_score",
+    "market_intelligence_confidence_score",
+    "market_demand_score",
+    "market_validation_score",
+    "market_novelty_score",
+    "market_trend_score",
+    "competition_intensity",
+    "github_stars",
+    "github_commits_90d",
+    "wallet_recent_signature_count",
+    "wallet_holdings_count",
+  ]);
+  const featureNumericEntries = primitiveMetricEntries(
+    project.feature_vector?.numeric,
+  );
+  const featureBooleanEntries = primitiveMetricEntries(
+    project.feature_vector?.boolean_flags,
+  );
+  const featureCategoricalEntries = primitiveMetricEntries(
+    project.feature_vector?.categorical,
+  );
+  const missingFeatureKeys = Object.entries(
+    project.feature_vector?.missingness_map ?? {},
+  )
+    .filter(([, missing]) => Boolean(missing))
+    .map(([key]) => key);
+  const factCategoryCounts = evidenceFacts.reduce<Record<string, number>>(
+    (accumulator, fact) => {
+      const category = fact.category || "uncategorized";
+      accumulator[category] = (accumulator[category] ?? 0) + 1;
+      return accumulator;
+    },
+    {},
+  );
+
+  return (
+    <div className="glass-card p-6 sm:p-8">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-xl font-semibold text-white">{project.name}</h3>
+            <Badge tone={project.status === "rejected" ? "danger" : "neutral"}>
+              {labelize(project.status)}
+            </Badge>
+            {decision && (
+              <Badge
+                tone={
+                  decision === "reject"
+                    ? "danger"
+                    : decision === "accept_reduced"
+                      ? "warning"
+                      : "success"
+                }
+              >
+                {labelize(decision)}
+              </Badge>
+            )}
+          </div>
+          {project.short_description && (
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              {project.short_description}
+            </p>
+          )}
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-[var(--text-muted)]">
+            <span>ID: {project.id}</span>
+            {project.github_url && <span>Repo: {project.github_url}</span>}
+            {project.recipient_wallet && (
+              <span title={project.recipient_wallet}>
+                Wallet: {shortenWallet(project.recipient_wallet)}
+              </span>
+            )}
+          </div>
+          <a
+            href={project.website_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-block text-xs text-[var(--violet)] transition-colors hover:text-[var(--blue)]"
+          >
+            {project.website_url}
+          </a>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge>{labelize(project.category)}</Badge>
+          {project.stage && <Badge>{labelize(project.stage)}</Badge>}
+          {project.decision_review?.agent_mode_used && (
+            <Badge>{`Agent: ${labelize(project.decision_review.agent_mode_used)}`}</Badge>
+          )}
+        </div>
+      </div>
+
+      <div className="px-2 py-4">
+        <StatusTimeline status={project.status} />
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <KpiCard
+          label="Score"
+          value={project.evaluation?.overall_score ?? project.ranking_score ?? "N/A"}
+        />
+        <KpiCard
+          label="Confidence"
+          value={labelize(project.evaluation?.confidence_level)}
+        />
+        <KpiCard
+          label="Risk"
+          value={labelize(project.evaluation?.risk_classification)}
+        />
+        <KpiCard
+          label="Approved Funding"
+          value={formatCurrency(fundingPackage?.approved_amount)}
+        />
+        <KpiCard label="Milestones" value={milestones.length} />
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <DetailPanel
+          title="Proposal Input"
+          subtitle="Canonical founder-submitted input used as the starting point for diligence, scoring, and package drafting."
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <KpiCard label="Team Size" value={project.team_size ?? "N/A"} />
+              <KpiCard
+                label="Requested Funding"
+                value={formatCurrency(project.requested_funding)}
+              />
+            </div>
+
+            {project.description && (
+              <div>
+                <p className="mb-1 text-xs text-[var(--text-muted)]">Description</p>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  {project.description}
+                </p>
+              </div>
+            )}
+
+            {project.team_background && (
+              <div>
+                <p className="mb-1 text-xs text-[var(--text-muted)]">
+                  Team Background
+                </p>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  {project.team_background}
+                </p>
+              </div>
+            )}
+
+            {project.market_summary && (
+              <div>
+                <p className="mb-1 text-xs text-[var(--text-muted)]">
+                  Market Summary
+                </p>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  {project.market_summary}
+                </p>
+              </div>
+            )}
+
+            {project.traction_summary && (
+              <div>
+                <p className="mb-1 text-xs text-[var(--text-muted)]">
+                  Traction Summary
+                </p>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  {project.traction_summary}
+                </p>
+              </div>
+            )}
+
+            {budgetItems.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-[var(--text-muted)]">Budget Breakdown</p>
+                {budgetItems.map((item, index) => (
+                  <div
+                    key={`${project.id}-budget-${index}`}
+                    className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <p className="text-sm font-medium text-white">
+                        {item.category}
+                      </p>
+                      <p className="text-sm font-semibold text-white">
+                        {formatCurrency(item.amount)}
+                      </p>
+                    </div>
+                    {item.notes && (
+                      <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                        {item.notes}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {founderMilestones.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-[var(--text-muted)]">Founder Milestones</p>
+                {founderMilestones.map((milestone, index) => (
+                  <div
+                    key={`${project.id}-founder-ms-${index}`}
+                    className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <p className="text-sm font-medium text-white">
+                        {milestone.name}
+                      </p>
+                      <p className="text-xs text-[var(--text-muted)]">
+                        {milestone.target_days !== undefined
+                          ? `Target day ${milestone.target_days}`
+                          : "No deadline"}
+                      </p>
+                    </div>
+                    <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                      {milestone.description}
+                    </p>
+                    {milestone.requested_release_ratio !== undefined && (
+                      <p className="mt-2 text-xs text-[var(--text-muted)]">
+                        Requested release:{" "}
+                        {formatPercent(milestone.requested_release_ratio)}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DetailPanel>
+
+        <DetailPanel
+          title="Project Actions"
+          subtitle="Patch diligence-sensitive fields and rerun the enrich or review stages without leaving the UI."
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <label className="mb-1 block text-xs text-[var(--text-muted)]">
+                  Website URL
+                </label>
+                <input
+                  value={draftFields.website_url}
+                  onChange={(event) =>
+                    setDraftFields((current) => ({
+                      ...current,
+                      website_url: event.target.value,
+                    }))
+                  }
+                  className="input-dark"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[var(--text-muted)]">
+                  GitHub Repository URL
+                </label>
+                <input
+                  value={draftFields.github_url}
+                  onChange={(event) =>
+                    setDraftFields((current) => ({
+                      ...current,
+                      github_url: event.target.value,
+                    }))
+                  }
+                  className="input-dark"
+                  placeholder="https://github.com/org/repo"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[var(--text-muted)]">
+                  Solana Recipient Wallet
+                </label>
+                <input
+                  value={draftFields.recipient_wallet}
+                  onChange={(event) =>
+                    setDraftFields((current) => ({
+                      ...current,
+                      recipient_wallet: event.target.value,
+                    }))
+                  }
+                  className="input-dark"
+                  placeholder="BWgJc8KvCbxqrn2Wggb395c2URfS19a5NoAEVDaiyXCa"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => runAction("save")}
+                disabled={activeAction !== null || !draftFields.website_url.trim()}
+                className="btn-secondary px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {activeAction === "save" ? "Saving..." : "Save Changes"}
+              </button>
+              <button
+                type="button"
+                onClick={() => runAction("enrich")}
+                disabled={activeAction !== null}
+                className="btn-gradient px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {activeAction === "enrich" ? "Running..." : "Run Enrichment"}
+              </button>
+              <button
+                type="button"
+                onClick={() => runAction("review")}
+                disabled={activeAction !== null}
+                className="btn-secondary px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {activeAction === "review" ? "Reviewing..." : "Rerun Review"}
+              </button>
+              <button
+                type="button"
+                onClick={() => runAction("refresh")}
+                disabled={activeAction !== null}
+                className="btn-secondary px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {activeAction === "refresh" ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Badge tone={project.enriched_data?.website_scraped ? "success" : "neutral"}>
+                Website {project.enriched_data?.website_scraped ? "ready" : "pending"}
+              </Badge>
+              <Badge tone={project.enriched_data?.github_scraped ? "success" : "neutral"}>
+                GitHub {project.enriched_data?.github_scraped ? "ready" : "pending"}
+              </Badge>
+              <Badge tone={project.enriched_data?.wallet_scraped ? "success" : "neutral"}>
+                Wallet {project.enriched_data?.wallet_scraped ? "ready" : "pending"}
+              </Badge>
+              <Badge
+                tone={project.enriched_data?.portfolio_context_applied ? "success" : "neutral"}
+              >
+                Portfolio{" "}
+                {project.enriched_data?.portfolio_context_applied ? "ready" : "pending"}
+              </Badge>
+              <Badge
+                tone={project.enriched_data?.market_intelligence_applied ? "success" : "neutral"}
+              >
+                Market{" "}
+                {project.enriched_data?.market_intelligence_applied ? "ready" : "pending"}
+              </Badge>
+            </div>
+
+            {actionMessage && (
+              <p className="text-sm text-[var(--success)]">{actionMessage}</p>
+            )}
+            {actionError && (
+              <p className="text-sm text-[var(--error)]">{actionError}</p>
+            )}
+
+            <div className="flex flex-wrap gap-4 text-xs text-[var(--text-muted)]">
+              <span>Created: {formatDate(project.created_at)}</span>
+              <span>Updated: {formatDate(project.updated_at)}</span>
+              <span>Reviewed: {formatDate(project.reviewed_at)}</span>
+            </div>
+          </div>
+        </DetailPanel>
+      </div>
+
+      {project.funding_decision && (
+        <div className="mt-6 space-y-4 border-t border-[var(--border)] pt-6">
+          <div>
+            <p className="mb-1 text-xs text-[var(--text-muted)]">
+              Decision Rationale
+            </p>
+            <p className="text-sm text-[var(--text-secondary)]">
+              {project.funding_decision.rationale}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <KpiCard
+              label="Approved"
+              value={formatCurrency(fundingPackage?.approved_amount)}
+            />
+            <KpiCard
+              label="Immediate"
+              value={formatCurrency(fundingPackage?.immediate_release_amount)}
+            />
+            <KpiCard
+              label="Escrowed"
+              value={formatCurrency(fundingPackage?.escrow_amount)}
+            />
+          </div>
+
+          {milestones.length > 0 && (
+            <div>
+              <p className="mb-3 text-xs text-[var(--text-muted)]">
+                Milestone Release Schedule
+              </p>
+              <div className="space-y-3">
+                {milestones.map((milestone) => (
+                  <div
+                    key={`${project.id}-${milestone.sequence}`}
+                    className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-4"
+                  >
+                    <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-white">
+                          {milestone.sequence}. {milestone.name}
+                        </p>
+                        <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                          {milestone.description}
+                        </p>
+                      </div>
+                      <p className="text-sm font-semibold text-white">
+                        {formatCurrency(milestone.release_amount)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-muted)]">
+                      <span>Target day {milestone.target_days}</span>
+                      <span>{labelize(milestone.verification_type)}</span>
+                      {milestone.success_metric && <span>{milestone.success_metric}</span>}
+                      {milestone.release_percentage !== undefined && (
+                        <span>{formatPercent(milestone.release_percentage)}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {project.funding_decision.policy_explanation &&
+            project.funding_decision.policy_explanation.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs text-[var(--text-muted)]">
+                  Policy Explanation
+                </p>
+                <ul className="space-y-1 text-sm text-[var(--text-secondary)]">
+                  {project.funding_decision.policy_explanation.map((item, index) => (
+                    <li key={`${project.id}-policy-${index}`}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+        </div>
+      )}
+
+      <div className="mt-6 space-y-4">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <DetailPanel
+            title="Evidence"
+            subtitle="Structured facts, provenance, and collector notes from website, GitHub, Solana, portfolio, and market-intelligence enrichment."
+          >
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <KpiCard label="Facts" value={evidenceFacts.length} />
+                <KpiCard label="Sources" value={evidenceSources.length} />
+                <KpiCard
+                  label="Confidence"
+                  value={formatPercent(evidenceBundle?.confidence?.overall)}
+                />
+                <KpiCard label="Stale Facts" value={staleFactCount ?? 0} />
+              </div>
+
+              {Object.keys(factCategoryCounts).length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-[var(--text-muted)]">Fact Categories</p>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(factCategoryCounts).map(([category, count]) => (
+                      <Badge key={`${project.id}-fact-cat-${category}`}>
+                        {labelize(category)}: {count}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <p className="text-xs text-[var(--text-muted)]">Provenance</p>
+                {evidenceSources.length > 0 ? (
+                  <div className="space-y-2">
+                    {evidenceSources.slice(0, 6).map((source, index) => {
+                      const href = sourceHref(source);
+                      return (
+                        <div
+                          key={`${project.id}-source-${index}`}
+                          className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3 text-sm text-[var(--text-secondary)]"
+                        >
+                          <p className="font-medium text-white">
+                            {sourceLabel(source, index)}
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--text-muted)]">
+                            {source.request_signature ||
+                              source.source_id ||
+                              source.invocation_id ||
+                              source.id ||
+                              "Generated source"}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-[var(--text-muted)]">
+                            {source.category && <span>{labelize(source.category)}</span>}
+                            {source.method && <span>{source.method}</span>}
+                            {source.observed_at && (
+                              <span>{formatDate(source.observed_at)}</span>
+                            )}
+                          </div>
+                          {href && (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-2 inline-block text-xs text-[var(--violet)] transition-colors hover:text-[var(--blue)]"
+                            >
+                              {href}
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[var(--text-muted)]">
+                    No external evidence bundle has been stored yet.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs text-[var(--text-muted)]">Coverage Signals</p>
+                <div className="flex flex-wrap gap-2">
+                  {thinEvidenceCategories.length > 0 ? (
+                    thinEvidenceCategories.map((item) => (
+                      <Badge key={`${project.id}-thin-${item}`} tone="warning">
+                        Thin: {labelize(item)}
+                      </Badge>
+                    ))
+                  ) : (
+                    <Badge tone="success">Coverage looks sufficient</Badge>
+                  )}
+                  {Object.entries(supportSummary).map(([key, value]) =>
+                    typeof value === "number" ? (
+                      <Badge key={`${project.id}-support-${key}`}>
+                        {labelize(key)}: {value}
+                      </Badge>
+                    ) : null,
+                  )}
+                </div>
+              </div>
+
+              {evidenceFacts.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-[var(--text-muted)]">Sample Facts</p>
+                  {evidenceFacts.slice(0, 5).map((fact, index) => (
+                    <div
+                      key={`${project.id}-fact-${index}`}
+                      className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge>{labelize(fact.category)}</Badge>
+                        {fact.key && <Badge>{labelize(fact.key)}</Badge>}
+                        {fact.support_status && (
+                          <Badge
+                            tone={
+                              fact.support_status === "contradicted"
+                                ? "danger"
+                                : fact.support_status === "observed" ||
+                                    fact.support_status === "supported"
+                                  ? "success"
+                                  : "neutral"
+                            }
+                          >
+                            {labelize(fact.support_status)}
+                          </Badge>
+                        )}
+                      </div>
+                      {fact.claim && (
+                        <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                          {fact.claim}
+                        </p>
+                      )}
+                      {fact.freshness_days !== undefined && (
+                        <p className="mt-2 text-xs text-[var(--text-muted)]">
+                          Freshness: {fact.freshness_days} day(s)
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-muted)]">
+                <span>Bundle hash: {shortenHash(evidenceBundle?.raw_payload_hash)}</span>
+                <span>
+                  Contradictions: {evidenceBundle?.contradiction_flags?.length ?? 0}
+                </span>
+                {project.enriched_data?.generated_at && (
+                  <span>Generated: {formatDate(project.enriched_data.generated_at)}</span>
+                )}
+              </div>
+
+              {(project.enriched_data?.notes?.length ?? 0) > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-[var(--text-muted)]">Collector Notes</p>
+                  <ul className="space-y-1 text-sm text-[var(--text-secondary)]">
+                    {project.enriched_data?.notes?.map((note, index) => (
+                      <li key={`${project.id}-note-${index}`}>{note}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {(project.enriched_data?.web_targets?.length ?? 0) > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-[var(--text-muted)]">Web Targets</p>
+                  <div className="flex flex-wrap gap-2">
+                    {project.enriched_data?.web_targets?.map((target, index) => (
+                      <Badge key={`${project.id}-target-${index}`}>
+                        {String(target.url || target.path || `Target ${index + 1}`)}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </DetailPanel>
+
+          <DetailPanel
+            title="Market Intelligence"
+            subtitle="Gemini-backed market synthesis plus deterministic market, GitHub, and wallet-derived metrics."
+          >
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <KpiCard
+                  label="Applied"
+                  value={project.enriched_data?.market_intelligence_applied ? "Yes" : "No"}
+                />
+                <KpiCard
+                  label="Website"
+                  value={project.enriched_data?.website_scraped ? "Yes" : "No"}
+                />
+                <KpiCard
+                  label="GitHub"
+                  value={project.enriched_data?.github_scraped ? "Yes" : "No"}
+                />
+                <KpiCard
+                  label="Wallet"
+                  value={project.enriched_data?.wallet_scraped ? "Yes" : "No"}
+                />
+              </div>
+
+              {marketMetrics.length > 0 && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {marketMetrics.map(([key, value]) => (
+                    <KpiCard
+                      key={`${project.id}-market-${key}`}
+                      label={labelize(key)}
+                      value={value}
+                    />
+                  ))}
+                </div>
+              )}
+
+              <JsonBlock
+                value={marketReport}
+                emptyMessage="No structured market report has been stored yet."
+              />
+            </div>
+          </DetailPanel>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <DetailPanel
+            title="Feature Vector"
+            subtitle="Deterministic normalized features used by the scoring engine. No LLM interpretation happens here."
+          >
+            {project.feature_vector ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <KpiCard label="Numeric" value={featureNumericEntries.length} />
+                  <KpiCard label="Boolean" value={featureBooleanEntries.length} />
+                  <KpiCard
+                    label="Categorical"
+                    value={featureCategoricalEntries.length}
+                  />
+                  <KpiCard label="Missing" value={missingFeatureKeys.length} />
+                </div>
+
+                {thinEvidenceCategories.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-[var(--text-muted)]">Thin Evidence</p>
+                    <div className="flex flex-wrap gap-2">
+                      {thinEvidenceCategories.map((item) => (
+                        <Badge key={`${project.id}-feature-thin-${item}`} tone="warning">
+                          {labelize(item)}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {missingFeatureKeys.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-[var(--text-muted)]">Missing Features</p>
+                    <div className="flex flex-wrap gap-2">
+                      {missingFeatureKeys.slice(0, 16).map((item) => (
+                        <Badge key={`${project.id}-feature-missing-${item}`}>
+                          {labelize(item)}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <JsonBlock
+                  value={project.feature_vector}
+                  emptyMessage="Feature vector unavailable."
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--text-muted)]">
+                No feature vector has been generated for this proposal yet.
+              </p>
+            )}
+          </DetailPanel>
+
+          <DetailPanel
+            title="Claim Assessments"
+            subtitle="Deterministic contradiction and support checks run over proposal claims and normalized evidence."
+          >
+            {claimAssessments.length > 0 ? (
+              <div className="space-y-3">
+                {claimAssessments.map((assessment, index) => (
+                  <div
+                    key={`${project.id}-assessment-${index}`}
+                    className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      {assessment.category && (
+                        <Badge>{labelize(assessment.category)}</Badge>
+                      )}
+                      {(assessment.status || assessment.support_status) && (
+                        <Badge
+                          tone={
+                            assessment.status === "contradicted" ||
+                            assessment.support_status === "contradicted"
+                              ? "danger"
+                              : assessment.status === "supported" ||
+                                  assessment.support_status === "supported"
+                                ? "success"
+                                : "warning"
+                          }
+                        >
+                          {labelize(
+                            assessment.status || assessment.support_status,
+                          )}
+                        </Badge>
+                      )}
+                    </div>
+                    {assessment.claim && (
+                      <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                        {assessment.claim}
+                      </p>
+                    )}
+                    {assessment.rationale && (
+                      <p className="mt-2 text-xs text-[var(--text-muted)]">
+                        {assessment.rationale}
+                      </p>
+                    )}
+                    {assessment.evidence_ids && assessment.evidence_ids.length > 0 && (
+                      <p className="mt-2 text-xs text-[var(--text-muted)]">
+                        Evidence refs: {assessment.evidence_ids.join(", ")}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--text-muted)]">
+                No contradiction results are stored yet.
+              </p>
+            )}
+          </DetailPanel>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <DetailPanel
+            title="Scorecard"
+            subtitle="Deterministic subscores, risk banding, reason codes, and missingness-aware confidence."
+          >
+            {project.scorecard ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <KpiCard
+                    label="Overall"
+                    value={formatNumber(project.scorecard.overall_score)}
+                  />
+                  <KpiCard
+                    label="Confidence"
+                    value={formatPercent(project.scorecard.confidence, 1)}
+                  />
+                  <KpiCard
+                    label="Risk"
+                    value={labelize(
+                      project.scorecard.risk_classification ||
+                        project.evaluation?.risk_classification,
+                    )}
+                  />
+                  <KpiCard
+                    label="Risk Score"
+                    value={
+                      project.scorecard.risk_band?.score !== undefined
+                        ? formatNumber(project.scorecard.risk_band.score)
+                        : "N/A"
+                    }
+                  />
+                </div>
+
+                {project.scorecard.subscores && (
+                  <div className="grid grid-cols-2 gap-3">
+                    {Object.entries(project.scorecard.subscores).map(([key, value]) => (
+                      <KpiCard
+                        key={`${project.id}-score-${key}`}
+                        label={labelize(key)}
+                        value={formatNumber(value)}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {project.scorecard.reason_codes &&
+                  project.scorecard.reason_codes.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-[var(--text-muted)]">Reason Codes</p>
+                      <div className="flex flex-wrap gap-2">
+                        {project.scorecard.reason_codes.map((reason) => (
+                          <Badge key={`${project.id}-reason-${reason}`}>
+                            {labelize(reason)}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                {project.scorecard.risk_band?.reason_codes &&
+                  project.scorecard.risk_band.reason_codes.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-[var(--text-muted)]">
+                        Risk Reasons
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {project.scorecard.risk_band.reason_codes.map((reason) => (
+                          <Badge key={`${project.id}-risk-reason-${reason}`}>
+                            {labelize(reason)}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                <JsonBlock
+                  value={project.scorecard}
+                  emptyMessage="No scorecard is available."
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--text-muted)]">
+                No scorecard is available for this proposal yet.
+              </p>
+            )}
+          </DetailPanel>
+
+          <DetailPanel
+            title="Funding Package Draft"
+            subtitle="Deterministic package recommendation generated before the agent proposes its final decision contract."
+          >
+            {project.funding_package_draft ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <KpiCard
+                    label="Label"
+                    value={labelize(project.funding_package_draft.recommendation_label)}
+                  />
+                  <KpiCard
+                    label="Requested"
+                    value={formatCurrency(
+                      project.funding_package_draft.requested_amount_usd,
+                    )}
+                  />
+                  <KpiCard
+                    label="Recommended"
+                    value={formatCurrency(
+                      project.funding_package_draft.recommended_amount_usd,
+                    )}
+                  />
+                  <KpiCard
+                    label="Treasury Capacity"
+                    value={formatCurrency(
+                      project.funding_package_draft.treasury_capacity_usd,
+                    )}
+                  />
+                </div>
+
+                {project.funding_package_draft.rationale_codes &&
+                  project.funding_package_draft.rationale_codes.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-[var(--text-muted)]">
+                        Draft Rationale Codes
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {project.funding_package_draft.rationale_codes.map((reason) => (
+                          <Badge key={`${project.id}-draft-${reason}`}>
+                            {labelize(reason)}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                {project.funding_package_draft.milestones &&
+                  project.funding_package_draft.milestones.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-[var(--text-muted)]">
+                        Draft Milestones
+                      </p>
+                      {project.funding_package_draft.milestones.map((milestone, index) => (
+                        <div
+                          key={`${project.id}-draft-milestone-${index}`}
+                          className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <p className="text-sm font-medium text-white">
+                              {milestone.deliverable_type
+                                ? labelize(milestone.deliverable_type)
+                                : `Milestone ${index + 1}`}
+                            </p>
+                            <p className="text-sm font-semibold text-white">
+                              {formatCurrency(milestone.amount_usd)}
+                            </p>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-3 text-xs text-[var(--text-muted)]">
+                            {milestone.verification_method && (
+                              <span>{labelize(milestone.verification_method)}</span>
+                            )}
+                            {milestone.deadline && (
+                              <span>{formatDate(milestone.deadline)}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                <JsonBlock
+                  value={project.funding_package_draft}
+                  emptyMessage="No funding package draft is available."
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--text-muted)]">
+                No funding package draft is attached to this proposal yet.
+              </p>
+            )}
+          </DetailPanel>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <DetailPanel
+            title="Treasury"
+            subtitle="Reserve buckets, liquidity safety constraints, and idle-capital allocation suggestions."
+          >
+            {project.treasury_allocation ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <KpiCard
+                    label="Hot Reserve"
+                    value={formatCurrency(project.treasury_allocation.hot_reserve)}
+                  />
+                  <KpiCard
+                    label="Committed"
+                    value={formatCurrency(
+                      project.treasury_allocation.committed_reserve,
+                    )}
+                  />
+                  <KpiCard
+                    label="Idle"
+                    value={formatCurrency(project.treasury_allocation.idle_treasury)}
+                  />
+                  <KpiCard
+                    label="Buffer"
+                    value={formatCurrency(
+                      project.treasury_allocation.strategic_buffer,
+                    )}
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <Badge
+                    tone={
+                      project.treasury_allocation.policy_compliant
+                        ? "success"
+                        : "danger"
+                    }
+                  >
+                    {project.treasury_allocation.policy_compliant
+                      ? "Policy compliant"
+                      : "Policy violation"}
+                  </Badge>
+                  <span className="text-[var(--text-muted)]">
+                    Available:{" "}
+                    {formatCurrency(
+                      project.treasury_allocation.available_for_new_commitments,
+                    )}
+                  </span>
+                  {project.treasury_allocation.liquidity_gap !== undefined && (
+                    <span className="text-[var(--text-muted)]">
+                      Liquidity gap:{" "}
+                      {formatCurrency(project.treasury_allocation.liquidity_gap)}
+                    </span>
+                  )}
+                </div>
+
+                {strategyAllocations.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-[var(--text-muted)]">
+                      Idle Allocation Suggestion
+                    </p>
+                    {strategyAllocations.map((allocation, index) => (
+                      <div
+                        key={`${project.id}-allocation-${index}`}
+                        className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-medium text-white">
+                              {allocation.strategy_name}
+                            </p>
+                            <p className="mt-1 text-xs text-[var(--text-muted)]">
+                              {labelize(allocation.liquidity_profile)}
+                            </p>
+                          </div>
+                          <p className="text-sm font-semibold text-white">
+                            {formatCurrency(allocation.amount)}
+                          </p>
+                        </div>
+                        <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                          {allocation.rationale}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {treasuryNotes.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-[var(--text-muted)]">Treasury Notes</p>
+                    <ul className="space-y-1 text-sm text-[var(--text-secondary)]">
+                      {treasuryNotes.map((note, index) => (
+                        <li key={`${project.id}-treasury-note-${index}`}>{note}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--text-muted)]">
+                No treasury snapshot is attached to this proposal yet.
+              </p>
+            )}
+          </DetailPanel>
+
+          <DetailPanel
+            title="Verifier"
+            subtitle="Formal policy checks run on the agent recommendation before execution."
+          >
+            {project.verifier_result || project.decision_review ? (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone={project.verifier_result?.passed ? "success" : "danger"}>
+                    {project.verifier_result?.passed ? "Pass" : "Fail"}
+                  </Badge>
+                  {project.decision_review?.agent_mode_used && (
+                    <Badge>{`Agent: ${labelize(project.decision_review.agent_mode_used)}`}</Badge>
+                  )}
+                  {project.decision_review?.revision_attempts !== undefined && (
+                    <Badge>{`Attempts: ${project.decision_review.revision_attempts}`}</Badge>
+                  )}
+                  {project.decision_review?.approved_for_execution !== undefined && (
+                    <Badge
+                      tone={
+                        project.decision_review.approved_for_execution
+                          ? "success"
+                          : "danger"
+                      }
+                    >
+                      {project.decision_review.approved_for_execution
+                        ? "Approved for execution"
+                        : "Blocked for execution"}
+                    </Badge>
+                  )}
+                </div>
+
+                {verifierViolations.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-[var(--text-muted)]">
+                      Violated Constraints
+                    </p>
+                    {verifierViolations.map((violation, index) => (
+                      <div
+                        key={`${project.id}-violation-${index}`}
+                        className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3"
+                      >
+                        <p className="text-sm font-medium text-white">
+                          {labelize(violation.code)}
+                        </p>
+                        <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                          {violation.message}
+                        </p>
+                        {violation.path && (
+                          <p className="mt-1 text-xs text-[var(--text-muted)]">
+                            Path: {violation.path}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    No policy violations were reported.
+                  </p>
+                )}
+
+                {project.decision_review?.warnings &&
+                  project.decision_review.warnings.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-[var(--text-muted)]">Warnings</p>
+                      <ul className="space-y-1 text-sm text-[var(--text-secondary)]">
+                        {project.decision_review.warnings.map((warning, index) => (
+                          <li key={`${project.id}-warning-${index}`}>{warning}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                {failedChecks.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-[var(--text-muted)]">Failed Checks</p>
+                    <div className="flex flex-wrap gap-2">
+                      {failedChecks.map((check) => (
+                        <Badge key={`${project.id}-failed-check-${check.code}`}>
+                          {labelize(check.code)}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <JsonBlock
+                  value={{
+                    verifier_result: project.verifier_result,
+                    decision_review: project.decision_review,
+                  }}
+                  emptyMessage="No verifier result is available."
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--text-muted)]">
+                No verifier result is available for this proposal yet.
+              </p>
+            )}
+          </DetailPanel>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <DetailPanel
+            title="Decision JSON"
+            subtitle="Strict agent recommendation contract before the verifier applies policy checks."
+          >
+            {project.decision_package ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <KpiCard
+                    label="Decision"
+                    value={labelize(project.decision_package.decision)}
+                  />
+                  <KpiCard
+                    label="Approved"
+                    value={formatCurrency(project.decision_package.approved_amount)}
+                  />
+                  <KpiCard
+                    label="Confidence"
+                    value={formatPercent(project.decision_package.confidence, 1)}
+                  />
+                  <KpiCard
+                    label="Milestones"
+                    value={project.decision_package.milestones.length}
+                  />
+                </div>
+
+                <div>
+                  <p className="mb-1 text-xs text-[var(--text-muted)]">Rationale</p>
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    {project.decision_package.rationale}
+                  </p>
+                </div>
+
+                {project.decision_package.score_inputs_used &&
+                  project.decision_package.score_inputs_used.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-[var(--text-muted)]">
+                        Score Inputs Used
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {project.decision_package.score_inputs_used.map((input) => (
+                          <Badge key={`${project.id}-input-${input}`}>
+                            {labelize(input)}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                {project.decision_package.requested_revisions &&
+                  project.decision_package.requested_revisions.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-[var(--text-muted)]">
+                        Requested Revisions
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {project.decision_package.requested_revisions.map((revision) => (
+                          <Badge key={`${project.id}-revision-${revision}`} tone="warning">
+                            {revision}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                <JsonBlock
+                  value={project.decision_package}
+                  emptyMessage="No decision package is available."
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--text-muted)]">
+                No decision package is attached to this proposal yet.
+              </p>
+            )}
+          </DetailPanel>
+
+          <DetailPanel
+            title="Evaluation Summary"
+            subtitle="Python-side evaluation view translated from the deterministic scorecard for downstream funding and UI presentation."
+          >
+            {project.evaluation ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <KpiCard
+                    label="Overall"
+                    value={formatNumber(project.evaluation.overall_score)}
+                  />
+                  <KpiCard
+                    label="Confidence Score"
+                    value={formatPercentValue(project.evaluation.confidence_score)}
+                  />
+                  <KpiCard
+                    label="Risk Score"
+                    value={formatPercentValue(project.evaluation.risk_score)}
+                  />
+                  <KpiCard
+                    label="Coverage"
+                    value={formatPercent(project.evaluation.evidence_coverage)}
+                  />
+                </div>
+
+                {project.evaluation.strengths &&
+                  project.evaluation.strengths.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-xs text-[var(--text-muted)]">
+                        Strengths
+                      </p>
+                      <ul className="space-y-1 text-sm text-[var(--text-secondary)]">
+                        {project.evaluation.strengths.map((item, index) => (
+                          <li key={`${project.id}-strength-${index}`}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                {project.evaluation.concerns &&
+                  project.evaluation.concerns.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-xs text-[var(--text-muted)]">
+                        Concerns
+                      </p>
+                      <ul className="space-y-1 text-sm text-[var(--text-secondary)]">
+                        {project.evaluation.concerns.map((item, index) => (
+                          <li key={`${project.id}-concern-${index}`}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                <JsonBlock
+                  value={project.evaluation}
+                  emptyMessage="No evaluation summary is available."
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--text-muted)]">
+                No evaluation summary is attached to this proposal yet.
+              </p>
+            )}
+          </DetailPanel>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusPageContent() {
+  const searchParams = useSearchParams();
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
   const [results, setResults] = useState<Project[]>([]);
-  const [searched, setSearched] = useState(false);
+  const [searched, setSearched] = useState(Boolean(searchParams.get("q")));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
+  const handleSearch = async (
+    event?: React.FormEvent,
+    forcedQuery?: string,
+  ) => {
+    event?.preventDefault();
+    const activeQuery = (forcedQuery ?? query).trim();
+    if (!activeQuery) return;
 
     setLoading(true);
     setError("");
@@ -356,63 +2065,82 @@ export default function StatusPage() {
     setResults([]);
 
     try {
-      const apiUrl =
-        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-      const res = await fetch(`${apiUrl}/api/projects`);
-      if (!res.ok) throw new Error("Failed to fetch projects");
-      const data: Project[] = await res.json();
-
-      const searchTerm = query.trim().toLowerCase();
-      const filtered = data.filter(
-        (p) =>
-          p.name.toLowerCase().includes(searchTerm) ||
-          p.website_url.toLowerCase().includes(searchTerm)
-      );
-      setResults(filtered);
+      const response = await fetch(`${apiUrl}/api/projects`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch projects");
+      }
+      const data = (await response.json()) as Project[];
+      setResults(filterProjects(data, activeQuery));
     } catch {
-      setError("Unable to search projects. Please check that the backend is running.");
+      setError(
+        "Unable to search projects. Please check that the backend is running.",
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    const initialQuery = searchParams.get("q");
+    if (initialQuery) {
+      void handleSearch(undefined, initialQuery);
+    }
+  }, [searchParams]);
+
+  const handleProjectUpdated = (updatedProject: Project) => {
+    setResults((current) =>
+      current.map((project) =>
+        project.id === updatedProject.id ? updatedProject : project,
+      ),
+    );
+  };
+
   return (
     <div className="pt-28 pb-20">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="mb-8 animate-fade-in">
           <p className="section-label">Track</p>
-          <h1 className="text-3xl sm:text-4xl font-bold gradient-text mb-3">
+          <h1 className="gradient-text mb-3 text-3xl font-bold sm:text-4xl">
             Proposal Review Status
           </h1>
           <p className="text-[var(--text-muted)]">
-            Search by project name or website to see the score, decision, and
-            milestone funding schedule.
+            Search by project name, website, GitHub repo, wallet, or project ID to
+            inspect the full pipeline: proposal input, evidence, feature vector,
+            scorecard, treasury, decision, and verifier output.
           </p>
         </div>
 
-        <div className="glass-card p-6 sm:p-8 mb-8 animate-fade-in-delay-1">
-          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
+        <div className="glass-card p-6 sm:p-8 animate-fade-in-delay-1">
+          <form
+            onSubmit={(event) => {
+              void handleSearch(event);
+            }}
+            className="flex flex-col gap-3 sm:flex-row"
+          >
             <input
               type="text"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(event) => setQuery(event.target.value)}
               className="input-dark flex-1"
-              placeholder="Enter project name or website URL"
+              placeholder="Enter project name, website, GitHub URL, wallet, or project ID"
             />
             <button
               type="submit"
               disabled={loading || !query.trim()}
-              className="btn-gradient px-6 py-2.5 text-sm font-semibold whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-gradient whitespace-nowrap px-6 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "Searching..." : "Search"}
             </button>
           </form>
+          <p className="mt-3 text-xs text-[var(--text-muted)]">
+            Tip: after submitting a proposal, search by the project ID shown on the
+            success screen for the fastest lookup.
+          </p>
         </div>
 
         {error && (
           <div
-            className="glass-card mb-6 p-4 animate-fade-in"
+            className="glass-card mb-6 mt-6 p-4 animate-fade-in"
             style={{
               borderColor: "rgba(239, 68, 68, 0.4)",
               background: "rgba(239, 68, 68, 0.05)",
@@ -423,13 +2151,13 @@ export default function StatusPage() {
         )}
 
         {loading && (
-          <div className="space-y-4 animate-fade-in">
-            {[1, 2].map((i) => (
-              <div key={i} className="glass-card p-6">
-                <div className="animate-pulse space-y-3">
-                  <div className="h-5 bg-[var(--surface-hover)] rounded w-1/3" />
-                  <div className="h-3 bg-[var(--surface)] rounded w-1/2" />
-                  <div className="h-8 bg-[var(--surface)] rounded w-full mt-4" />
+          <div className="mt-6 space-y-4 animate-fade-in">
+            {[1, 2].map((item) => (
+              <div key={item} className="glass-card p-6">
+                <div className="space-y-3 animate-pulse">
+                  <div className="h-5 w-1/3 rounded bg-[var(--surface-hover)]" />
+                  <div className="h-3 w-1/2 rounded bg-[var(--surface)]" />
+                  <div className="mt-4 h-8 w-full rounded bg-[var(--surface)]" />
                 </div>
               </div>
             ))}
@@ -437,14 +2165,15 @@ export default function StatusPage() {
         )}
 
         {searched && !loading && !error && (
-          <div className="space-y-4 animate-fade-in">
+          <div className="mt-6 space-y-4 animate-fade-in">
             {results.length === 0 ? (
-              <div className="glass-card p-8 sm:p-12 text-center">
-                <h3 className="text-lg font-semibold text-white mb-2">
+              <div className="glass-card p-8 text-center sm:p-12">
+                <h3 className="mb-2 text-lg font-semibold text-white">
                   No projects found matching your search
                 </h3>
-                <p className="text-sm text-[var(--text-muted)] mb-6">
-                  Double-check the spelling or submit a new proposal.
+                <p className="mb-6 text-sm text-[var(--text-muted)]">
+                  Double-check the handle, wallet, or repository URL, or submit a
+                  new proposal.
                 </p>
                 <Link
                   href="/submit"
@@ -454,628 +2183,40 @@ export default function StatusPage() {
                 </Link>
               </div>
             ) : (
-              results.map((project) => {
-                const decision = project.funding_decision?.decision;
-                const fundingPackage = project.funding_decision?.funding_package;
-                const milestones = project.funding_decision?.milestone_schedule ?? [];
-                const evidenceBundle = project.enriched_data?.evidence_bundle;
-                const evidenceFacts = evidenceBundle?.facts ?? [];
-                const evidenceSources = evidenceBundle?.sources ?? [];
-                const supportSummary = evidenceBundle?.support_summary ?? {};
-                const staleFactCount = evidenceBundle?.freshness_summary?.stale_fact_count;
-                const thinEvidenceCategories =
-                  project.scorecard?.missingness_summary?.thin_evidence_categories ?? [];
-                const verifierViolations = project.verifier_result?.violations ?? [];
-                const failedChecks =
-                  project.verifier_result?.check_results?.filter((check) => !check.passed) ?? [];
-                const strategyAllocations =
-                  project.treasury_allocation?.strategy_allocations ?? [];
-                const treasuryNotes = project.treasury_allocation?.notes ?? [];
-
-                return (
-                  <div key={project.id} className="glass-card p-6 sm:p-8">
-                    <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-                      <div>
-                        <h3 className="text-xl font-semibold text-white">
-                          {project.name}
-                        </h3>
-                        {project.short_description && (
-                          <p className="text-sm text-[var(--text-secondary)] mt-1">
-                            {project.short_description}
-                          </p>
-                        )}
-                        <a
-                          href={project.website_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-[var(--text-muted)] hover:text-[var(--violet)] transition-colors mt-2 inline-block"
-                        >
-                          {project.website_url}
-                        </a>
-                      </div>
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]">
-                        {labelize(project.category)}
-                      </span>
-                    </div>
-
-                    <div className="py-4 px-2">
-                      <StatusTimeline status={project.status} />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mt-4">
-                      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-                        <p className="text-xs text-[var(--text-muted)] mb-1">Score</p>
-                        <p className="text-lg font-semibold text-white">
-                          {project.evaluation?.overall_score ?? project.ranking_score ?? "N/A"}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-                        <p className="text-xs text-[var(--text-muted)] mb-1">Confidence</p>
-                        <p className="text-lg font-semibold text-white">
-                          {labelize(project.evaluation?.confidence_level)}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-                        <p className="text-xs text-[var(--text-muted)] mb-1">Risk</p>
-                        <p className="text-lg font-semibold text-white">
-                          {labelize(project.evaluation?.risk_classification)}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-                        <p className="text-xs text-[var(--text-muted)] mb-1">Decision</p>
-                        <p className="text-lg font-semibold text-white">
-                          {labelize(decision)}
-                        </p>
-                      </div>
-                    </div>
-
-                    {project.funding_decision && (
-                      <div className="mt-5 pt-5 border-t border-[var(--border)] space-y-4">
-                        <div>
-                          <p className="text-xs text-[var(--text-muted)] mb-1">
-                            Decision Rationale
-                          </p>
-                          <p className="text-sm text-[var(--text-secondary)]">
-                            {project.funding_decision.rationale}
-                          </p>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-                            <p className="text-xs text-[var(--text-muted)] mb-1">Approved</p>
-                            <p className="text-lg font-semibold text-white">
-                              {formatCurrency(fundingPackage?.approved_amount)}
-                            </p>
-                          </div>
-                          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-                            <p className="text-xs text-[var(--text-muted)] mb-1">Immediate</p>
-                            <p className="text-lg font-semibold text-white">
-                              {formatCurrency(fundingPackage?.immediate_release_amount)}
-                            </p>
-                          </div>
-                          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-                            <p className="text-xs text-[var(--text-muted)] mb-1">Escrowed</p>
-                            <p className="text-lg font-semibold text-white">
-                              {formatCurrency(fundingPackage?.escrow_amount)}
-                            </p>
-                          </div>
-                        </div>
-
-                        {project.recipient_wallet && (
-                          <div>
-                            <p className="text-xs text-[var(--text-muted)] mb-1">Wallet</p>
-                            <p
-                              className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)]"
-                              title={project.recipient_wallet}
-                            >
-                              {shortenWallet(project.recipient_wallet)}
-                            </p>
-                          </div>
-                        )}
-
-                        {milestones.length > 0 && (
-                          <div>
-                            <p className="text-xs text-[var(--text-muted)] mb-3">
-                              Milestone Release Schedule
-                            </p>
-                            <div className="space-y-3">
-                              {milestones.map((milestone) => (
-                                <div
-                                  key={`${project.id}-${milestone.sequence}`}
-                                  className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-4"
-                                >
-                                  <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
-                                    <div>
-                                      <p className="text-sm font-semibold text-white">
-                                        {milestone.sequence}. {milestone.name}
-                                      </p>
-                                      <p className="text-sm text-[var(--text-secondary)] mt-1">
-                                        {milestone.description}
-                                      </p>
-                                    </div>
-                                    <p className="text-sm font-semibold text-white">
-                                      {formatCurrency(milestone.release_amount)}
-                                    </p>
-                                  </div>
-                                  <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-muted)]">
-                                    <span>Target day {milestone.target_days}</span>
-                                    <span>{labelize(milestone.verification_type)}</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {(evidenceBundle ||
-                      project.scorecard ||
-                      project.treasury_allocation ||
-                      project.decision_package ||
-                      project.verifier_result) && (
-                      <div className="mt-6 space-y-4">
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                          <DetailPanel
-                            title="Evidence"
-                            subtitle="Structured facts and provenance gathered during diligence."
-                          >
-                            {evidenceBundle ? (
-                              <div className="space-y-4">
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
-                                    <p className="text-[11px] text-[var(--text-muted)] mb-1">Facts</p>
-                                    <p className="text-base font-semibold text-white">{evidenceFacts.length}</p>
-                                  </div>
-                                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
-                                    <p className="text-[11px] text-[var(--text-muted)] mb-1">Sources</p>
-                                    <p className="text-base font-semibold text-white">{evidenceSources.length}</p>
-                                  </div>
-                                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
-                                    <p className="text-[11px] text-[var(--text-muted)] mb-1">Confidence</p>
-                                    <p className="text-base font-semibold text-white">
-                                      {formatPercent(evidenceBundle.confidence?.overall)}
-                                    </p>
-                                  </div>
-                                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
-                                    <p className="text-[11px] text-[var(--text-muted)] mb-1">Stale Facts</p>
-                                    <p className="text-base font-semibold text-white">{staleFactCount ?? 0}</p>
-                                  </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                  <p className="text-xs text-[var(--text-muted)]">Provenance</p>
-                                  {evidenceSources.length > 0 ? (
-                                    <div className="space-y-2">
-                                      {evidenceSources.slice(0, 4).map((source, index) => {
-                                        const href = sourceHref(source);
-                                        return (
-                                          <div
-                                            key={`${project.id}-source-${index}`}
-                                            className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3 text-sm text-[var(--text-secondary)]"
-                                          >
-                                            <p className="font-medium text-white">{sourceLabel(source, index)}</p>
-                                            <p className="text-xs text-[var(--text-muted)] mt-1">
-                                              {source.source_id || source.invocation_id || "Generated source"}
-                                            </p>
-                                            {href && (
-                                              <a
-                                                href={href}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-xs text-[var(--violet)] hover:text-[var(--blue)] transition-colors mt-2 inline-block"
-                                              >
-                                                {href}
-                                              </a>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  ) : (
-                                    <p className="text-sm text-[var(--text-muted)]">
-                                      No external evidence bundle has been stored yet.
-                                    </p>
-                                  )}
-                                </div>
-
-                                <div className="space-y-2">
-                                  <p className="text-xs text-[var(--text-muted)]">Coverage Signals</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {thinEvidenceCategories.length > 0 ? (
-                                      thinEvidenceCategories.map((item) => (
-                                        <span
-                                          key={`${project.id}-thin-${item}`}
-                                          className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--bg)] px-3 py-1 text-xs text-[var(--text-secondary)]"
-                                        >
-                                          Thin: {labelize(item)}
-                                        </span>
-                                      ))
-                                    ) : (
-                                      <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--bg)] px-3 py-1 text-xs text-[var(--text-secondary)]">
-                                        Coverage looks sufficient
-                                      </span>
-                                    )}
-                                    {Object.entries(supportSummary).map(([key, value]) => (
-                                      <span
-                                        key={`${project.id}-support-${key}`}
-                                        className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--bg)] px-3 py-1 text-xs text-[var(--text-secondary)]"
-                                      >
-                                        {labelize(key)}: {value}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
-                                  <span>Raw payload hash: {shortenHash(evidenceBundle.raw_payload_hash)}</span>
-                                  <span>
-                                    Contradictions: {evidenceBundle.contradiction_flags?.length ?? 0}
-                                  </span>
-                                </div>
-
-                                {(project.enriched_data?.notes?.length ?? 0) > 0 && (
-                                  <div className="space-y-2">
-                                    <p className="text-xs text-[var(--text-muted)]">Collector Notes</p>
-                                    <ul className="space-y-1 text-sm text-[var(--text-secondary)]">
-                                      {project.enriched_data?.notes?.slice(0, 4).map((note, index) => (
-                                        <li key={`${project.id}-note-${index}`}>{note}</li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-[var(--text-muted)]">
-                                No enrichment bundle is attached to this proposal yet.
-                              </p>
-                            )}
-                          </DetailPanel>
-
-                          <DetailPanel
-                            title="Scorecard"
-                            subtitle="Deterministic subscores, confidence, and risk used for ranking."
-                          >
-                            {project.scorecard ? (
-                              <div className="space-y-4">
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
-                                    <p className="text-[11px] text-[var(--text-muted)] mb-1">Overall</p>
-                                    <p className="text-base font-semibold text-white">{project.scorecard.overall_score}</p>
-                                  </div>
-                                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
-                                    <p className="text-[11px] text-[var(--text-muted)] mb-1">Confidence</p>
-                                    <p className="text-base font-semibold text-white">
-                                      {formatPercent(project.scorecard.confidence, 1)}
-                                    </p>
-                                  </div>
-                                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
-                                    <p className="text-[11px] text-[var(--text-muted)] mb-1">Risk</p>
-                                    <p className="text-base font-semibold text-white">
-                                      {labelize(project.scorecard.risk_classification)}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                {project.scorecard.subscores && (
-                                  <div className="grid grid-cols-2 gap-3">
-                                    {Object.entries(project.scorecard.subscores).map(([key, value]) => (
-                                      <div
-                                        key={`${project.id}-subscore-${key}`}
-                                        className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3"
-                                      >
-                                        <p className="text-[11px] text-[var(--text-muted)] mb-1">
-                                          {labelize(key)}
-                                        </p>
-                                        <p className="text-base font-semibold text-white">{value}</p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {project.scorecard.reason_codes && project.scorecard.reason_codes.length > 0 && (
-                                  <div className="space-y-2">
-                                    <p className="text-xs text-[var(--text-muted)]">Reason Codes</p>
-                                    <div className="flex flex-wrap gap-2">
-                                      {project.scorecard.reason_codes.slice(0, 10).map((reason) => (
-                                        <span
-                                          key={`${project.id}-reason-${reason}`}
-                                          className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--bg)] px-3 py-1 text-xs text-[var(--text-secondary)]"
-                                        >
-                                          {labelize(reason)}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-[var(--text-muted)]">
-                                No scorecard is available for this proposal yet.
-                              </p>
-                            )}
-                          </DetailPanel>
-
-                          <DetailPanel
-                            title="Treasury"
-                            subtitle="Reserve buckets and idle-capital allocation policy for this decision."
-                          >
-                            {project.treasury_allocation ? (
-                              <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-3">
-                                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
-                                    <p className="text-[11px] text-[var(--text-muted)] mb-1">Hot Reserve</p>
-                                    <p className="text-base font-semibold text-white">
-                                      {formatCurrency(project.treasury_allocation.hot_reserve)}
-                                    </p>
-                                  </div>
-                                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
-                                    <p className="text-[11px] text-[var(--text-muted)] mb-1">Committed</p>
-                                    <p className="text-base font-semibold text-white">
-                                      {formatCurrency(project.treasury_allocation.committed_reserve)}
-                                    </p>
-                                  </div>
-                                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
-                                    <p className="text-[11px] text-[var(--text-muted)] mb-1">Idle</p>
-                                    <p className="text-base font-semibold text-white">
-                                      {formatCurrency(project.treasury_allocation.idle_treasury)}
-                                    </p>
-                                  </div>
-                                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
-                                    <p className="text-[11px] text-[var(--text-muted)] mb-1">Buffer</p>
-                                    <p className="text-base font-semibold text-white">
-                                      {formatCurrency(project.treasury_allocation.strategic_buffer)}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                <div className="flex flex-wrap items-center gap-2 text-xs">
-                                  <span
-                                    className="inline-flex items-center rounded-full px-3 py-1 font-medium"
-                                    style={{
-                                      background: project.treasury_allocation.policy_compliant
-                                        ? "rgba(34,197,94,0.15)"
-                                        : "rgba(239,68,68,0.15)",
-                                      color: project.treasury_allocation.policy_compliant
-                                        ? "var(--success)"
-                                        : "var(--error)",
-                                    }}
-                                  >
-                                    {project.treasury_allocation.policy_compliant
-                                      ? "Policy compliant"
-                                      : "Policy violation"}
-                                  </span>
-                                  <span className="text-[var(--text-muted)]">
-                                    Available: {formatCurrency(project.treasury_allocation.available_for_new_commitments)}
-                                  </span>
-                                  {project.treasury_allocation.liquidity_gap !== undefined && (
-                                    <span className="text-[var(--text-muted)]">
-                                      Liquidity gap: {formatCurrency(project.treasury_allocation.liquidity_gap)}
-                                    </span>
-                                  )}
-                                </div>
-
-                                {strategyAllocations.length > 0 && (
-                                  <div className="space-y-2">
-                                    <p className="text-xs text-[var(--text-muted)]">Idle Allocation Suggestion</p>
-                                    {strategyAllocations.map((allocation, index) => (
-                                      <div
-                                        key={`${project.id}-allocation-${index}`}
-                                        className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3"
-                                      >
-                                        <div className="flex flex-wrap items-start justify-between gap-2">
-                                          <div>
-                                            <p className="text-sm font-medium text-white">
-                                              {allocation.strategy_name}
-                                            </p>
-                                            <p className="text-xs text-[var(--text-muted)] mt-1">
-                                              {labelize(allocation.liquidity_profile)}
-                                            </p>
-                                          </div>
-                                          <p className="text-sm font-semibold text-white">
-                                            {formatCurrency(allocation.amount)}
-                                          </p>
-                                        </div>
-                                        <p className="text-sm text-[var(--text-secondary)] mt-2">
-                                          {allocation.rationale}
-                                        </p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {treasuryNotes.length > 0 && (
-                                  <div className="space-y-2">
-                                    <p className="text-xs text-[var(--text-muted)]">Treasury Notes</p>
-                                    <ul className="space-y-1 text-sm text-[var(--text-secondary)]">
-                                      {treasuryNotes.slice(0, 4).map((note, index) => (
-                                        <li key={`${project.id}-treasury-note-${index}`}>{note}</li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-[var(--text-muted)]">
-                                No treasury snapshot is attached to this proposal yet.
-                              </p>
-                            )}
-                          </DetailPanel>
-
-                          <DetailPanel
-                            title="Verifier"
-                            subtitle="Formal policy checks run on the agent recommendation before execution."
-                          >
-                            {project.verifier_result || project.decision_review ? (
-                              <div className="space-y-4">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span
-                                    className="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium"
-                                    style={{
-                                      background:
-                                        project.verifier_result?.passed
-                                          ? "rgba(34,197,94,0.15)"
-                                          : "rgba(239,68,68,0.15)",
-                                      color:
-                                        project.verifier_result?.passed
-                                          ? "var(--success)"
-                                          : "var(--error)",
-                                    }}
-                                  >
-                                    {project.verifier_result?.passed ? "Pass" : "Fail"}
-                                  </span>
-                                  {project.decision_review?.agent_mode_used && (
-                                    <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--bg)] px-3 py-1 text-xs text-[var(--text-secondary)]">
-                                      Agent: {labelize(project.decision_review.agent_mode_used)}
-                                    </span>
-                                  )}
-                                  {project.decision_review?.revision_attempts !== undefined && (
-                                    <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--bg)] px-3 py-1 text-xs text-[var(--text-secondary)]">
-                                      Attempts: {project.decision_review.revision_attempts}
-                                    </span>
-                                  )}
-                                  {project.decision_review?.approved_for_execution !== undefined && (
-                                    <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--bg)] px-3 py-1 text-xs text-[var(--text-secondary)]">
-                                      {project.decision_review.approved_for_execution
-                                        ? "Approved for execution"
-                                        : "Blocked for execution"}
-                                    </span>
-                                  )}
-                                </div>
-
-                                {verifierViolations.length > 0 ? (
-                                  <div className="space-y-2">
-                                    <p className="text-xs text-[var(--text-muted)]">Violated Constraints</p>
-                                    {verifierViolations.map((violation, index) => (
-                                      <div
-                                        key={`${project.id}-violation-${index}`}
-                                        className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3"
-                                      >
-                                        <p className="text-sm font-medium text-white">
-                                          {labelize(violation.code)}
-                                        </p>
-                                        <p className="text-sm text-[var(--text-secondary)] mt-1">
-                                          {violation.message}
-                                        </p>
-                                        {violation.path && (
-                                          <p className="text-xs text-[var(--text-muted)] mt-1">
-                                            Path: {violation.path}
-                                          </p>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-[var(--text-secondary)]">
-                                    No policy violations were reported.
-                                  </p>
-                                )}
-
-                                {project.decision_review?.warnings && project.decision_review.warnings.length > 0 && (
-                                  <div className="space-y-2">
-                                    <p className="text-xs text-[var(--text-muted)]">Warnings</p>
-                                    <ul className="space-y-1 text-sm text-[var(--text-secondary)]">
-                                      {project.decision_review.warnings.map((warning, index) => (
-                                        <li key={`${project.id}-warning-${index}`}>{warning}</li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
-
-                                {failedChecks.length > 0 && (
-                                  <div className="space-y-2">
-                                    <p className="text-xs text-[var(--text-muted)]">Failed Checks</p>
-                                    <div className="flex flex-wrap gap-2">
-                                      {failedChecks.slice(0, 8).map((check) => (
-                                        <span
-                                          key={`${project.id}-failed-check-${check.code}`}
-                                          className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--bg)] px-3 py-1 text-xs text-[var(--text-secondary)]"
-                                        >
-                                          {labelize(check.code)}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-[var(--text-muted)]">
-                                No verifier result is available for this proposal yet.
-                              </p>
-                            )}
-                          </DetailPanel>
-                        </div>
-
-                        {project.decision_package && (
-                          <DetailPanel
-                            title="Decision JSON"
-                            subtitle="Strict agent recommendation contract before the verifier applies policy checks."
-                          >
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                              <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
-                                <p className="text-[11px] text-[var(--text-muted)] mb-1">Decision</p>
-                                <p className="text-base font-semibold text-white">
-                                  {labelize(project.decision_package.decision)}
-                                </p>
-                              </div>
-                              <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
-                                <p className="text-[11px] text-[var(--text-muted)] mb-1">Approved</p>
-                                <p className="text-base font-semibold text-white">
-                                  {formatCurrency(project.decision_package.approved_amount)}
-                                </p>
-                              </div>
-                              <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
-                                <p className="text-[11px] text-[var(--text-muted)] mb-1">Confidence</p>
-                                <p className="text-base font-semibold text-white">
-                                  {formatPercent(project.decision_package.confidence, 1)}
-                                </p>
-                              </div>
-                              <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
-                                <p className="text-[11px] text-[var(--text-muted)] mb-1">Milestones</p>
-                                <p className="text-base font-semibold text-white">
-                                  {project.decision_package.milestones.length}
-                                </p>
-                              </div>
-                            </div>
-
-                            {project.decision_package.requested_revisions &&
-                              project.decision_package.requested_revisions.length > 0 && (
-                                <div className="mb-4">
-                                  <p className="text-xs text-[var(--text-muted)] mb-2">Requested Revisions</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {project.decision_package.requested_revisions.map((revision) => (
-                                      <span
-                                        key={`${project.id}-revision-${revision}`}
-                                        className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--bg)] px-3 py-1 text-xs text-[var(--text-secondary)]"
-                                      >
-                                        {revision}
-                                      </span>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                            <pre className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--bg)] p-4 text-xs leading-6 text-[var(--text-secondary)]">
-                              {formatJson(project.decision_package)}
-                            </pre>
-                          </DetailPanel>
-                        )}
-                      </div>
-                    )}
-
-                    {project.created_at && (
-                      <p className="text-xs text-[var(--text-muted)] mt-5">
-                        Applied {formatDate(project.created_at)}
-                        {project.stage ? ` - Stage ${labelize(project.stage)}` : ""}
-                      </p>
-                    )}
-                  </div>
-                );
-              })
+              results.map((project) => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  apiUrl={apiUrl}
+                  onProjectUpdated={handleProjectUpdated}
+                />
+              ))
             )}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+export default function StatusPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="pt-28 pb-20">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6">
+            <div className="glass-card p-6 sm:p-8">
+              <div className="space-y-3 animate-pulse">
+                <div className="h-6 w-48 rounded bg-[var(--surface-hover)]" />
+                <div className="h-4 w-full rounded bg-[var(--surface)]" />
+                <div className="h-12 w-full rounded bg-[var(--surface)]" />
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <StatusPageContent />
+    </Suspense>
   );
 }
