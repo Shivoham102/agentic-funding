@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
@@ -25,6 +26,8 @@ from models.project import (
     ProjectUpdate,
 )
 from services.funding_execution import FundingExecutionError, FundingExecutionService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 evaluation_agent = EvaluationAgent()
@@ -202,6 +205,55 @@ async def _run_review_pipeline(project_doc: dict) -> dict:
     return result
 
 
+async def _auto_execute_if_approved(project_doc: dict) -> dict:
+    """Auto-trigger funding execution if the review pipeline produced an approved decision.
+
+    Returns the updated project doc (with execution results) on success,
+    or the original doc unchanged if execution is not applicable or fails.
+    """
+    funding_decision = project_doc.get("funding_decision") or {}
+    decision_label = (funding_decision.get("decision") or "").lower()
+    if decision_label not in {
+        FundingDecisionType.accept.value,
+        FundingDecisionType.accept_reduced.value,
+    }:
+        return project_doc
+
+    current_exec_status = (project_doc.get("execution_status") or "").lower()
+    if current_exec_status in {
+        ExecutionStatus.processing.value,
+        ExecutionStatus.completed.value,
+        ExecutionStatus.partial.value,
+        ExecutionStatus.dry_run.value,
+    }:
+        return project_doc
+
+    db = get_database()
+    try:
+        exec_response = await funding_execution_service.execute_project(project_doc, db)
+        logger.info(
+            "Auto-execution completed for project %s: status=%s",
+            str(project_doc.get("_id")),
+            exec_response.execution_status.value,
+        )
+        updated_doc = await db.projects.find_one({"_id": project_doc["_id"]})
+        return updated_doc if updated_doc else project_doc
+    except FundingExecutionError as exc:
+        logger.warning(
+            "Auto-execution skipped for project %s: %s",
+            str(project_doc.get("_id")),
+            exc.detail,
+        )
+        return project_doc
+    except Exception as exc:
+        logger.error(
+            "Auto-execution failed for project %s: %s",
+            str(project_doc.get("_id")),
+            exc,
+        )
+        return project_doc
+
+
 @router.post("/", response_model=ProjectResponse, status_code=201)
 async def create_project(project: ProjectCreate) -> ProjectResponse:
     """Create a new project submission and run the deterministic review flow."""
@@ -231,6 +283,7 @@ async def create_project(project: ProjectCreate) -> ProjectResponse:
     result = await db.projects.insert_one(doc)
     doc["_id"] = result.inserted_id
     reviewed_doc = await _run_review_pipeline(doc)
+    reviewed_doc = await _auto_execute_if_approved(reviewed_doc)
     return _doc_to_response(reviewed_doc)
 
 
@@ -272,6 +325,7 @@ async def review_project(project_id: str) -> ProjectResponse:
     if doc is None:
         raise HTTPException(status_code=404, detail="Project not found")
     reviewed_doc = await _run_review_pipeline(doc)
+    reviewed_doc = await _auto_execute_if_approved(reviewed_doc)
     return _doc_to_response(reviewed_doc)
 
 
@@ -313,6 +367,7 @@ async def enrich_project(project_id: str) -> ProjectResponse:
         if enriched_doc is None:
             raise HTTPException(status_code=404, detail="Project not found")
         reviewed_doc = await _run_review_pipeline(enriched_doc)
+        reviewed_doc = await _auto_execute_if_approved(reviewed_doc)
         return _doc_to_response(reviewed_doc)
     except HTTPException:
         await db.projects.find_one_and_update(
