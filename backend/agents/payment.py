@@ -4,6 +4,7 @@ import logging
 import shutil
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from config import Settings
@@ -72,6 +73,32 @@ class PaymentAgent:
             env["ANTHROPIC_API_KEY"] = self.settings.ANTHROPIC_API_KEY
         return env
 
+    async def _run_subprocess(self, cmd: list[str]) -> str:
+        safe_cmd = " ".join(a if not a.startswith("0x") or len(a) < 20 else a[:10] + "..." for a in cmd)
+        logger.info(f"Running: {safe_cmd}")
+
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=self._build_env(),
+        )
+        stdout, stderr = await process.communicate()
+        stdout_str = stdout.decode("utf-8", errors="replace").strip()
+        stderr_str = stderr.decode("utf-8", errors="replace").strip()
+
+        if process.returncode != 0:
+            error_msg = stderr_str or stdout_str or f"Command exited with code {process.returncode}"
+            logger.error(f"Command failed (exit {process.returncode}): {error_msg}")
+            raise RuntimeError(error_msg)
+
+        if stdout_str:
+            logger.info(f"Command stdout: {stdout_str[:200]}")
+        if stderr_str:
+            logger.debug(f"Command stderr: {stderr_str[:200]}")
+
+        return stdout_str
+
     async def _run_nla(self, args: list[str], include_auth: bool = True) -> str:
         """Run an NLA CLI command and return stdout."""
         cmd = [self._nla_path] + args
@@ -88,31 +115,8 @@ class PaymentAgent:
             cmd = ["cmd", "/c"] + cmd
 
         # Log command without private key
-        safe_cmd = " ".join(a if not a.startswith("0x") or len(a) < 20 else a[:10] + "..." for a in cmd)
-        logger.info(f"Running: {safe_cmd}")
-
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=self._build_env(),
-        )
-        stdout, stderr = await process.communicate()
-        stdout_str = stdout.decode("utf-8", errors="replace").strip()
-        stderr_str = stderr.decode("utf-8", errors="replace").strip()
-
-        if process.returncode != 0:
-            error_msg = stderr_str or stdout_str or f"NLA exited with code {process.returncode}"
-            logger.error(f"NLA command failed (exit {process.returncode}): {error_msg}")
-            raise RuntimeError(error_msg)
-
-        # Log output for debugging
-        if stdout_str:
-            logger.info(f"NLA stdout: {stdout_str[:200]}")
-        if stderr_str:
-            logger.debug(f"NLA stderr: {stderr_str[:200]}")
-
-        if not stdout_str and not stderr_str and args[0] not in ("switch", "wallet:set", "wallet:clear", "stop"):
+        stdout_str = await self._run_subprocess(cmd)
+        if not stdout_str and args[0] not in ("switch", "wallet:set", "wallet:clear", "stop"):
             logger.warning(f"NLA command returned empty output - possible silent failure (is Bun installed?)")
 
         return stdout_str
@@ -207,15 +211,23 @@ class PaymentAgent:
         try:
             token_address = self.settings.ESCROW_TOKEN_ADDRESS
 
-            # Use NLA to create a payment escrow with a trivially satisfied demand
-            # This effectively acts as a direct transfer through the escrow system
-            output = await self._run_nla([
-                "escrow:create",
-                "--demand", "This is a direct payment. Condition: always true.",
-                "--amount", str(amount),
-                "--token", token_address,
-                "--oracle", self.settings.ORACLE_WALLET_ADDRESS,
-            ])
+            script_path = Path(__file__).resolve().parent.parent / "scripts" / "direct-transfer.js"
+            output = await self._run_subprocess(
+                [
+                    "node",
+                    str(script_path),
+                    "--to",
+                    recipient_address,
+                    "--amount",
+                    str(amount),
+                    "--token",
+                    token_address,
+                    "--private-key",
+                    self.settings.ORACLE_PRIVATE_KEY,
+                    "--rpc-url",
+                    self.settings.BASE_SEPOLIA_RPC_URL,
+                ]
+            )
 
             tx_hash = self._parse_uid_from_output(output)
 

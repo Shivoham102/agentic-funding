@@ -153,7 +153,7 @@ class DataCollectorAgent:
     ) -> dict[str, Any]:
         website_url = self._text(project.get("website_url"))
         github_url = self._text(project.get("github_url"))
-        recipient_wallet = self._text(project.get("recipient_wallet"))
+        recipient_wallet = self._solana_wallet(project)
         project_name = self._text(project.get("name")) or "Unknown project"
         generated_at = self._now_iso()
         portfolio_projects = portfolio_projects or []
@@ -926,7 +926,7 @@ class DataCollectorAgent:
     ) -> dict[str, Any]:
         observed_at = self._now_iso()
         proposal_domain = self._normalized_domain(self._text(project.get("website_url")))
-        proposal_wallet = self._text(project.get("recipient_wallet"))
+        proposal_wallet = self._solana_wallet(project)
         proposal_github = self._normalize_github_repo_url(self._text(project.get("github_url")))
         proposal_tokens = self._text_tokens(
             self._join_text(
@@ -954,7 +954,7 @@ class DataCollectorAgent:
             if proposal_domain and portfolio_domain and proposal_domain == portfolio_domain:
                 same_domain.append(portfolio)
 
-            portfolio_wallet = self._text(portfolio.get("recipient_wallet"))
+            portfolio_wallet = self._solana_wallet(portfolio)
             if proposal_wallet and portfolio_wallet and proposal_wallet == portfolio_wallet:
                 same_wallet.append(portfolio)
 
@@ -1005,6 +1005,7 @@ class DataCollectorAgent:
                 "stage": project.get("stage"),
                 "website_domain": proposal_domain,
                 "recipient_wallet": proposal_wallet or None,
+                "recipient_solana_address": proposal_wallet or None,
                 "github_repository": proposal_github or None,
             },
             "overlap_summary": {
@@ -1862,6 +1863,12 @@ class DataCollectorAgent:
 
     def _text(self, value: Any) -> str:
         return value.strip() if isinstance(value, str) else ""
+
+    def _solana_wallet(self, project: dict[str, Any]) -> str:
+        explicit = self._text(project.get("recipient_solana_address"))
+        if explicit:
+            return explicit
+        return self._text(project.get("recipient_wallet"))
 
     def _to_float(self, value: Any, default: float = 0.0) -> float:
         try:

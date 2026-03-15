@@ -11,6 +11,7 @@ const PROPOSAL_CATEGORIES = [
 ] as const;
 
 const PROPOSAL_STAGES = ["idea", "mvp", "beta", "live", "scaling"] as const;
+const PAYOUT_CHAINS = ["solana", "base_sepolia"] as const;
 
 const EVIDENCE_SOURCE_KINDS = [
   "unbrowse_intent",
@@ -98,6 +99,11 @@ const ProposalStageSchema = z.preprocess(
   z.enum(PROPOSAL_STAGES),
 );
 
+const OptionalPayoutChainSchema = z.preprocess(
+  (value) => (typeof value === "string" ? normalizeEnumValue(value, PAYOUT_CHAINS, "base_sepolia") : undefined),
+  z.enum(PAYOUT_CHAINS).optional(),
+);
+
 const EvidenceSourceKindSchema = z.preprocess(
   (value) => normalizeEnumValue(value, EVIDENCE_SOURCE_KINDS, "other"),
   z.enum(EVIDENCE_SOURCE_KINDS),
@@ -146,6 +152,9 @@ export const CanonicalProposalSchema = z.object({
   team_size: OptionalIntegerSchema,
   requested_funding_usd: OptionalNumberSchema,
   recipient_wallet: OptionalStringSchema,
+  recipient_solana_address: OptionalStringSchema,
+  recipient_evm_address: OptionalStringSchema,
+  preferred_payout_chain: OptionalPayoutChainSchema,
   team_background: OptionalStringSchema,
   market_summary: OptionalStringSchema,
   traction_summary: OptionalStringSchema,
@@ -318,6 +327,8 @@ const BooleanFeaturesSchema = z.object({
   has_website_url: z.boolean(),
   has_github_url: z.boolean(),
   has_recipient_wallet: z.boolean(),
+  has_recipient_solana_address: z.boolean(),
+  has_recipient_evm_address: z.boolean(),
   has_team_background: z.boolean(),
   has_market_summary: z.boolean(),
   has_traction_summary: z.boolean(),
@@ -548,7 +559,9 @@ export function extractFeatures(proposalInput: unknown, evidenceInput: unknown):
     boolean_flags: {
       has_website_url: Boolean(proposal.website_url),
       has_github_url: Boolean(proposal.github_url),
-      has_recipient_wallet: Boolean(proposal.recipient_wallet),
+      has_recipient_wallet: Boolean(proposal.recipient_wallet || proposal.recipient_solana_address),
+      has_recipient_solana_address: Boolean(proposal.recipient_solana_address || proposal.recipient_wallet),
+      has_recipient_evm_address: Boolean(proposal.recipient_evm_address),
       has_team_background: Boolean(proposal.team_background),
       has_market_summary: Boolean(proposal.market_summary),
       has_traction_summary: Boolean(proposal.traction_summary),
@@ -645,6 +658,9 @@ function remapProposalInput(input: unknown): Record<string, unknown> {
     team_size: record?.team_size,
     requested_funding_usd: record?.requested_funding_usd ?? record?.requested_funding,
     recipient_wallet: getString(record, "recipient_wallet"),
+    recipient_solana_address: getString(record, "recipient_solana_address"),
+    recipient_evm_address: getString(record, "recipient_evm_address"),
+    preferred_payout_chain: getString(record, "preferred_payout_chain"),
     team_background: getString(record, "team_background"),
     market_summary: getString(record, "market_summary"),
     traction_summary: getString(record, "traction_summary"),
@@ -815,7 +831,7 @@ function computeProposalCompletenessRatio(proposal: CanonicalProposal): number {
     typeof proposal.requested_funding_usd === "number",
     proposal.budget_breakdown.length > 0,
     proposal.requested_milestones.length > 0,
-    Boolean(proposal.recipient_wallet),
+    Boolean(proposal.recipient_wallet || proposal.recipient_solana_address || proposal.recipient_evm_address),
   ];
   return checkpoints.filter(Boolean).length / checkpoints.length;
 }

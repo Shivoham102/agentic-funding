@@ -30,6 +30,33 @@ class ProjectStatus(str, Enum):
     rejected = "rejected"
 
 
+class PayoutChain(str, Enum):
+    solana = "solana"
+    base_sepolia = "base_sepolia"
+
+
+class ExecutionStatus(str, Enum):
+    not_started = "not_started"
+    blocked = "blocked"
+    processing = "processing"
+    dry_run = "dry_run"
+    completed = "completed"
+    partial = "partial"
+    failed = "failed"
+
+
+class FundingExecutionActionType(str, Enum):
+    immediate_payout = "immediate_payout"
+    milestone_escrow = "milestone_escrow"
+
+
+class FundingExecutionRecordStatus(str, Enum):
+    planned = "planned"
+    succeeded = "succeeded"
+    dry_run = "dry_run"
+    error = "error"
+
+
 class EscrowInfo(BaseModel):
     """Escrow details for a funded project."""
     escrow_attestation_uid: str | None = None
@@ -158,6 +185,74 @@ class FundingDecision(BaseModel):
     milestone_schedule: list[MilestoneScheduleItem] = Field(default_factory=list)
 
 
+class FundingExecutionAction(BaseModel):
+    action_id: str
+    action_type: FundingExecutionActionType
+    amount: float = Field(..., ge=0)
+    payout_chain: PayoutChain
+    recipient: str
+    milestone_id: Optional[str] = None
+    milestone_name: Optional[str] = None
+    sequence: Optional[int] = Field(default=None, ge=1)
+    deliverable_type: Optional[str] = None
+    verification_method: Optional[str] = None
+    deadline: Optional[str] = None
+    demand: Optional[str] = None
+    provider: str
+    provider_metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class FundingExecutionPlan(BaseModel):
+    schema_version: str = "funding-execution-plan-v1"
+    plan_id: str
+    project_id: str
+    generated_at: str
+    approved_for_execution: bool
+    decision: FundingDecisionType
+    payout_chain: PayoutChain
+    requested_amount: float = Field(..., ge=0)
+    approved_amount: float = Field(..., ge=0)
+    recipient_solana_address: Optional[str] = None
+    recipient_evm_address: Optional[str] = None
+    treasury_snapshot: dict[str, Any] = Field(default_factory=dict)
+    immediate_payout: Optional[FundingExecutionAction] = None
+    escrow_actions: list[FundingExecutionAction] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
+class FundingExecutionRecord(BaseModel):
+    schema_version: str = "funding-execution-record-v1"
+    record_id: str
+    project_id: str
+    plan_id: str
+    action_id: str
+    action_type: FundingExecutionActionType
+    status: FundingExecutionRecordStatus
+    payout_chain: PayoutChain
+    recipient: str
+    amount: float = Field(..., ge=0)
+    milestone_id: Optional[str] = None
+    milestone_name: Optional[str] = None
+    verification_method: Optional[str] = None
+    provider: str
+    provider_metadata: dict[str, Any] = Field(default_factory=dict)
+    escrow_uid: Optional[str] = None
+    tx_hash: Optional[str] = None
+    error: Optional[str] = None
+    raw_result: Optional[dict[str, Any]] = None
+    created_at: str
+    updated_at: str
+
+
+class FundingExecutionResponse(BaseModel):
+    project_id: str
+    execution_status: ExecutionStatus
+    execution_plan: FundingExecutionPlan
+    payment_records: list[FundingExecutionRecord] = Field(default_factory=list)
+    escrow_uids: list[str] = Field(default_factory=list)
+    tx_hashes: list[str] = Field(default_factory=list)
+
+
 class ProjectCreate(BaseModel):
     """Schema for creating a new project submission."""
     name: str
@@ -170,6 +265,9 @@ class ProjectCreate(BaseModel):
     stage: ProjectStage
     requested_funding: Optional[float] = None
     recipient_wallet: Optional[str] = None
+    recipient_solana_address: Optional[str] = None
+    recipient_evm_address: Optional[str] = None
+    preferred_payout_chain: Optional[PayoutChain] = None
     team_background: Optional[str] = None
     market_summary: Optional[str] = None
     traction_summary: Optional[str] = None
@@ -189,6 +287,9 @@ class ProjectUpdate(BaseModel):
     stage: Optional[ProjectStage] = None
     requested_funding: Optional[float] = None
     recipient_wallet: Optional[str] = None
+    recipient_solana_address: Optional[str] = None
+    recipient_evm_address: Optional[str] = None
+    preferred_payout_chain: Optional[PayoutChain] = None
     team_background: Optional[str] = None
     market_summary: Optional[str] = None
     traction_summary: Optional[str] = None
@@ -205,6 +306,8 @@ class ProjectUpdate(BaseModel):
     verifier_result: Optional[dict[str, Any]] = None
     decision_review: Optional[dict[str, Any]] = None
     escrow_info: Optional[EscrowInfo] = None
+    execution_status: Optional[ExecutionStatus] = None
+    execution_plan_json: Optional[FundingExecutionPlan] = None
     evaluation: Optional[EvaluationResult] = None
     treasury_allocation: Optional[TreasuryAllocation] = None
     funding_decision: Optional[FundingDecision] = None
@@ -225,6 +328,8 @@ class ProjectInDB(ProjectCreate):
     verifier_result: Optional[dict[str, Any]] = None
     decision_review: Optional[dict[str, Any]] = None
     escrow_info: Optional[EscrowInfo] = None
+    execution_status: ExecutionStatus = ExecutionStatus.not_started
+    execution_plan_json: Optional[FundingExecutionPlan] = None
     evaluation: Optional[EvaluationResult] = None
     treasury_allocation: Optional[TreasuryAllocation] = None
     funding_decision: Optional[FundingDecision] = None

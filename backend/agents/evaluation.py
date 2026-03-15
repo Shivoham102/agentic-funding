@@ -666,7 +666,7 @@ class EvaluationAgent:
             bool(project.get("requested_milestones")),
             bool(metrics),
         ]
-        if self._text(project.get("recipient_wallet")):
+        if self._solana_wallet(project):
             slots.append(True)
         return sum(1 for slot in slots if slot) / len(slots)
 
@@ -690,7 +690,7 @@ class EvaluationAgent:
             bool(project.get("budget_breakdown")),
             bool(project.get("requested_milestones")),
         ]
-        if self._text(project.get("recipient_wallet")):
+        if self._solana_wallet(project):
             slots.append(bool(enriched.get("wallet_scraped")))
         if project.get("website_url") or project.get("github_url"):
             slots.append(bool(enriched.get("market_intelligence_applied")))
@@ -847,3 +847,9 @@ class EvaluationAgent:
 
     def _text(self, value: Any) -> str:
         return str(value).strip() if value is not None else ""
+
+    def _solana_wallet(self, project: dict[str, Any]) -> str:
+        explicit = self._text(project.get("recipient_solana_address"))
+        if explicit:
+            return explicit
+        return self._text(project.get("recipient_wallet"))

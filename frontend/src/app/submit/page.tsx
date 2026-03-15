@@ -59,6 +59,9 @@ export default function SubmitPage() {
     category: "other",
     github_url: "",
     recipient_wallet: "",
+    recipient_solana_address: "",
+    recipient_evm_address: "",
+    preferred_payout_chain: "",
     team_size: "",
     stage: "mvp",
     requested_funding: "",
@@ -144,6 +147,9 @@ export default function SubmitPage() {
       category: "other",
       github_url: "",
       recipient_wallet: "",
+      recipient_solana_address: "",
+      recipient_evm_address: "",
+      preferred_payout_chain: "",
       team_size: "",
       stage: "mvp",
       requested_funding: "",
@@ -171,6 +177,9 @@ export default function SubmitPage() {
           : undefined,
         github_url: formData.github_url || undefined,
         recipient_wallet: formData.recipient_wallet || undefined,
+        recipient_solana_address: formData.recipient_solana_address || undefined,
+        recipient_evm_address: formData.recipient_evm_address || undefined,
+        preferred_payout_chain: formData.preferred_payout_chain || undefined,
         team_background: formData.team_background || undefined,
         market_summary: formData.market_summary || undefined,
         traction_summary: formData.traction_summary || undefined,
@@ -234,8 +243,8 @@ export default function SubmitPage() {
 
   if (success) {
     return (
-      <div className="pt-28 pb-20">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6">
+      <div className="page-shell">
+        <div className="page-container">
           <div className="glass-card p-8 sm:p-12 text-center animate-fade-in">
             <div
               className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full"
@@ -262,9 +271,7 @@ export default function SubmitPage() {
               Proposal Submitted
             </h1>
             <p className="mx-auto mb-4 max-w-md text-[var(--text-secondary)]">
-              The review pipeline has already started. You can now inspect the
-              evidence bundle, scorecard, treasury state, and verifier output from
-              the status page.
+              Open the review page to inspect the result.
             </p>
             {submittedProject && (
               <div className="mx-auto mb-8 max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-4 text-left">
@@ -305,17 +312,15 @@ export default function SubmitPage() {
   }
 
   return (
-    <div className="pt-28 pb-20">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6">
-        <div className="mb-8 animate-fade-in">
+    <div className="page-shell">
+      <div className="page-container">
+        <div className="page-header animate-fade-in">
           <p className="section-label">Apply</p>
-          <h1 className="gradient-text mb-3 text-3xl font-bold sm:text-4xl">
-            Submit a Startup Proposal
+          <h1 className="text-3xl font-bold text-white sm:text-4xl">
+            Submit proposal
           </h1>
-          <p className="text-[var(--text-muted)]">
-            Capture the founder narrative, budget, milestones, repository, and
-            Solana payout wallet in the same schema the diligence and scoring
-            pipeline reads downstream.
+          <p className="text-sm text-[var(--text-muted)]">
+            Founder input for diligence, scoring, and funding execution.
           </p>
         </div>
 
@@ -494,23 +499,75 @@ export default function SubmitPage() {
               </div>
             </div>
 
-            <div>
-              <label htmlFor="recipient_wallet" className={labelClass}>
-                Solana Recipient Wallet
-              </label>
-              <input
-                type="text"
-                id="recipient_wallet"
-                name="recipient_wallet"
-                value={formData.recipient_wallet}
-                onChange={handleChange}
-                className="input-dark"
-                placeholder="BWgJc8KvCbxqrn2Wggb395c2URfS19a5NoAEVDaiyXCa"
-              />
-              <p className="mt-1.5 text-xs text-[var(--text-muted)]">
-                Optional. Used for Solana wallet enrichment and downstream funding
-                release simulation.
-              </p>
+            <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5">
+              <div className="mb-4">
+                <p className="text-sm font-semibold text-white">Payout Addresses</p>
+                <p className="mt-1 text-xs text-[var(--text-muted)]">
+                  Execution addresses. Legacy wallet is optional fallback only.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="recipient_solana_address" className={labelClass}>
+                    Recipient Solana Address
+                  </label>
+                  <input
+                    type="text"
+                    id="recipient_solana_address"
+                    name="recipient_solana_address"
+                    value={formData.recipient_solana_address}
+                    onChange={handleChange}
+                    className="input-dark"
+                    placeholder="BWgJc8KvCbxqrn2Wggb395c2URfS19a5NoAEVDaiyXCa"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="recipient_evm_address" className={labelClass}>
+                    Recipient EVM Address
+                  </label>
+                  <input
+                    type="text"
+                    id="recipient_evm_address"
+                    name="recipient_evm_address"
+                    value={formData.recipient_evm_address}
+                    onChange={handleChange}
+                    className="input-dark"
+                    placeholder="0x47d0079dA447f21bEea09B209BCad84A5d2d2705"
+                  />
+                </div>
+              </div>
+              <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="preferred_payout_chain" className={labelClass}>
+                    Preferred Payout Chain
+                  </label>
+                  <select
+                    id="preferred_payout_chain"
+                    name="preferred_payout_chain"
+                    value={formData.preferred_payout_chain}
+                    onChange={handleChange}
+                    className="input-dark"
+                  >
+                    <option value="">Auto-detect</option>
+                    <option value="base_sepolia">Base Sepolia</option>
+                    <option value="solana">Solana</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="recipient_wallet" className={labelClass}>
+                    Legacy Wallet Field
+                  </label>
+                  <input
+                    type="text"
+                    id="recipient_wallet"
+                    name="recipient_wallet"
+                    value={formData.recipient_wallet}
+                    onChange={handleChange}
+                    className="input-dark"
+                    placeholder="Optional legacy wallet value"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-5">
@@ -565,8 +622,7 @@ export default function SubmitPage() {
                 <div>
                   <p className="text-sm font-semibold text-white">Budget Breakdown</p>
                   <p className="text-xs text-[var(--text-muted)] mt-1">
-                    Optional founder-submitted budget lines used in capital-efficiency
-                    scoring.
+                    Optional budget lines.
                   </p>
                 </div>
                 <button
@@ -636,8 +692,7 @@ export default function SubmitPage() {
                 <div>
                   <p className="text-sm font-semibold text-white">Founder Milestones</p>
                   <p className="text-xs text-[var(--text-muted)] mt-1">
-                    Optional milestone roadmap used to draft escrow releases and
-                    package recommendations.
+                    Optional milestone roadmap.
                   </p>
                 </div>
                 <button

@@ -292,6 +292,9 @@ interface Project {
   requested_funding?: number;
   github_url?: string;
   recipient_wallet?: string;
+  recipient_solana_address?: string;
+  recipient_evm_address?: string;
+  preferred_payout_chain?: string;
   team_background?: string;
   market_summary?: string;
   traction_summary?: string;
@@ -307,6 +310,31 @@ interface Project {
   decision_review?: DecisionReview;
   treasury_allocation?: TreasuryAllocation;
   funding_decision?: FundingDecision;
+  execution_status?: string;
+  execution_plan_json?: Record<string, unknown>;
+}
+
+interface FundingExecutionRecord {
+  record_id: string;
+  project_id: string;
+  plan_id: string;
+  action_id: string;
+  action_type: string;
+  status: string;
+  payout_chain: string;
+  recipient: string;
+  amount: number;
+  milestone_id?: string;
+  milestone_name?: string;
+  verification_method?: string;
+  provider: string;
+  provider_metadata?: Record<string, unknown>;
+  escrow_uid?: string;
+  tx_hash?: string;
+  error?: string;
+  raw_result?: Record<string, unknown> | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 const STATUS_STEPS = ["submitted", "processing", "reviewed", "funded"] as const;
@@ -394,6 +422,40 @@ function shortenHash(value: string | undefined): string {
   return `${value.slice(0, 10)}...${value.slice(-6)}`;
 }
 
+function executionStatusTone(
+  status: string | undefined,
+): "neutral" | "success" | "warning" | "danger" {
+  switch (status) {
+    case "completed":
+      return "success";
+    case "dry_run":
+    case "processing":
+    case "partial":
+      return "warning";
+    case "failed":
+    case "blocked":
+      return "danger";
+    default:
+      return "neutral";
+  }
+}
+
+function recordStatusTone(
+  status: string | undefined,
+): "neutral" | "success" | "warning" | "danger" {
+  switch (status) {
+    case "succeeded":
+      return "success";
+    case "dry_run":
+    case "planned":
+      return "warning";
+    case "error":
+      return "danger";
+    default:
+      return "neutral";
+  }
+}
+
 function sourceLabel(source: EvidenceSource, index: number): string {
   return labelize(
     source.label ||
@@ -424,6 +486,8 @@ function filterProjects(projects: Project[], query: string): Project[] {
       project.website_url,
       project.github_url,
       project.recipient_wallet,
+      project.recipient_solana_address,
+      project.recipient_evm_address,
     ]
       .filter(Boolean)
       .some((field) => String(field).toLowerCase().includes(searchTerm)),
@@ -635,23 +699,94 @@ function ProjectCard({
     website_url: project.website_url || "",
     github_url: project.github_url || "",
     recipient_wallet: project.recipient_wallet || "",
+    recipient_solana_address: project.recipient_solana_address || "",
+    recipient_evm_address: project.recipient_evm_address || "",
+    preferred_payout_chain: project.preferred_payout_chain || "",
   });
   const [activeAction, setActiveAction] = useState<
-    "save" | "enrich" | "review" | "refresh" | null
+    "save" | "enrich" | "review" | "execute" | "refresh" | null
   >(null);
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
+  const [executionRecords, setExecutionRecords] = useState<FundingExecutionRecord[]>([]);
+  const [executionRecordsLoading, setExecutionRecordsLoading] = useState(false);
+  const [executionRecordsError, setExecutionRecordsError] = useState("");
 
   useEffect(() => {
     setDraftFields({
       website_url: project.website_url || "",
       github_url: project.github_url || "",
       recipient_wallet: project.recipient_wallet || "",
+      recipient_solana_address: project.recipient_solana_address || "",
+      recipient_evm_address: project.recipient_evm_address || "",
+      preferred_payout_chain: project.preferred_payout_chain || "",
     });
-  }, [project.id, project.website_url, project.github_url, project.recipient_wallet]);
+  }, [
+    project.id,
+    project.website_url,
+    project.github_url,
+    project.recipient_wallet,
+    project.recipient_solana_address,
+    project.recipient_evm_address,
+      project.preferred_payout_chain,
+  ]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadExecutionRecords = async () => {
+      if (
+        !project.execution_status ||
+        project.execution_status === "not_started"
+      ) {
+        if (isActive) {
+          setExecutionRecords([]);
+          setExecutionRecordsError("");
+          setExecutionRecordsLoading(false);
+        }
+        return;
+      }
+
+      if (isActive) {
+        setExecutionRecordsLoading(true);
+        setExecutionRecordsError("");
+      }
+
+      try {
+        const response = await fetch(
+          `${apiUrl}/api/projects/${project.id}/execution-records`,
+        );
+        if (!response.ok) {
+          throw new Error(`Request failed with ${response.status}`);
+        }
+        const data = (await response.json()) as FundingExecutionRecord[];
+        if (isActive) {
+          setExecutionRecords(data);
+        }
+      } catch (error) {
+        if (isActive) {
+          setExecutionRecordsError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load execution records.",
+          );
+        }
+      } finally {
+        if (isActive) {
+          setExecutionRecordsLoading(false);
+        }
+      }
+    };
+
+    void loadExecutionRecords();
+
+    return () => {
+      isActive = false;
+    };
+  }, [apiUrl, project.execution_status, project.id, project.updated_at]);
 
   const runAction = async (
-    action: "save" | "enrich" | "review" | "refresh",
+    action: "save" | "enrich" | "review" | "execute" | "refresh",
   ) => {
     setActiveAction(action);
     setActionError("");
@@ -668,6 +803,12 @@ function ProjectCard({
             website_url: draftFields.website_url.trim(),
             github_url: draftFields.github_url.trim() || null,
             recipient_wallet: draftFields.recipient_wallet.trim() || null,
+            recipient_solana_address:
+              draftFields.recipient_solana_address.trim() || null,
+            recipient_evm_address:
+              draftFields.recipient_evm_address.trim() || null,
+            preferred_payout_chain:
+              draftFields.preferred_payout_chain.trim() || null,
           }),
         });
       } else if (action === "enrich") {
@@ -678,6 +819,13 @@ function ProjectCard({
         response = await fetch(`${apiUrl}/api/projects/${project.id}/review`, {
           method: "POST",
         });
+      } else if (action === "execute") {
+        response = await fetch(
+          `${apiUrl}/api/projects/${project.id}/execute-funding`,
+          {
+            method: "POST",
+          },
+        );
       } else {
         response = await fetch(`${apiUrl}/api/projects/${project.id}`);
       }
@@ -686,7 +834,21 @@ function ProjectCard({
         throw new Error(`Request failed with ${response.status}`);
       }
 
-      const updatedProject = (await response.json()) as Project;
+      let updatedProject: Project;
+      if (action === "execute") {
+        const executionResponse = (await response.json()) as {
+          payment_records?: FundingExecutionRecord[];
+        };
+        setExecutionRecords(executionResponse.payment_records ?? []);
+        setExecutionRecordsError("");
+        const refreshedResponse = await fetch(`${apiUrl}/api/projects/${project.id}`);
+        if (!refreshedResponse.ok) {
+          throw new Error("Execution completed but the project could not be reloaded.");
+        }
+        updatedProject = (await refreshedResponse.json()) as Project;
+      } else {
+        updatedProject = (await response.json()) as Project;
+      }
       onProjectUpdated(updatedProject);
       setActionMessage(
         action === "save"
@@ -695,6 +857,8 @@ function ProjectCard({
             ? "Live enrichment completed and review reran."
             : action === "review"
               ? "Deterministic review reran."
+              : action === "execute"
+                ? "Funding execution completed for the latest verified plan."
               : "Project reloaded from the backend.",
       );
     } catch (error) {
@@ -730,6 +894,17 @@ function ProjectCard({
   const founderMilestones = project.requested_milestones ?? [];
   const claimAssessments = project.enriched_data?.claim_assessments ?? [];
   const marketReport = project.enriched_data?.market_intelligence_report;
+  const executionPlan = project.execution_plan_json;
+  const executionEscrowActions = Array.isArray(executionPlan?.escrow_actions)
+    ? executionPlan.escrow_actions.length
+    : 0;
+  const executionHasImmediatePayout = Boolean(executionPlan?.immediate_payout);
+  const executionTxHashes = executionRecords
+    .map((record) => record.tx_hash)
+    .filter((value): value is string => Boolean(value));
+  const executionEscrowUids = executionRecords
+    .map((record) => record.escrow_uid)
+    .filter((value): value is string => Boolean(value));
   const marketMetrics = primitiveMetricEntries(project.enriched_data?.metrics, [
     "market_intelligence_score",
     "market_intelligence_confidence_score",
@@ -799,7 +974,17 @@ function ProjectCard({
             {project.github_url && <span>Repo: {project.github_url}</span>}
             {project.recipient_wallet && (
               <span title={project.recipient_wallet}>
-                Wallet: {shortenWallet(project.recipient_wallet)}
+                Legacy Wallet: {shortenWallet(project.recipient_wallet)}
+              </span>
+            )}
+            {project.recipient_solana_address && (
+              <span title={project.recipient_solana_address}>
+                Solana: {shortenWallet(project.recipient_solana_address)}
+              </span>
+            )}
+            {project.recipient_evm_address && (
+              <span title={project.recipient_evm_address}>
+                EVM: {shortenWallet(project.recipient_evm_address)}
               </span>
             )}
           </div>
@@ -817,6 +1002,11 @@ function ProjectCard({
           {project.stage && <Badge>{labelize(project.stage)}</Badge>}
           {project.decision_review?.agent_mode_used && (
             <Badge>{`Agent: ${labelize(project.decision_review.agent_mode_used)}`}</Badge>
+          )}
+          {project.execution_status && (
+            <Badge tone={executionStatusTone(project.execution_status)}>
+              {`Execution: ${labelize(project.execution_status)}`}
+            </Badge>
           )}
         </div>
       </div>
@@ -848,7 +1038,7 @@ function ProjectCard({
       <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
         <DetailPanel
           title="Proposal Input"
-          subtitle="Canonical founder-submitted input used as the starting point for diligence, scoring, and package drafting."
+          subtitle="Founder input."
         >
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -963,7 +1153,7 @@ function ProjectCard({
 
         <DetailPanel
           title="Project Actions"
-          subtitle="Patch diligence-sensitive fields and rerun the enrich or review stages without leaving the UI."
+          subtitle="Update fields or rerun stages."
         >
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-3">
@@ -1000,7 +1190,7 @@ function ProjectCard({
               </div>
               <div>
                 <label className="mb-1 block text-xs text-[var(--text-muted)]">
-                  Solana Recipient Wallet
+                  Legacy Wallet Field
                 </label>
                 <input
                   value={draftFields.recipient_wallet}
@@ -1013,6 +1203,57 @@ function ProjectCard({
                   className="input-dark"
                   placeholder="BWgJc8KvCbxqrn2Wggb395c2URfS19a5NoAEVDaiyXCa"
                 />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[var(--text-muted)]">
+                  Recipient Solana Address
+                </label>
+                <input
+                  value={draftFields.recipient_solana_address}
+                  onChange={(event) =>
+                    setDraftFields((current) => ({
+                      ...current,
+                      recipient_solana_address: event.target.value,
+                    }))
+                  }
+                  className="input-dark"
+                  placeholder="BWgJc8KvCbxqrn2Wggb395c2URfS19a5NoAEVDaiyXCa"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[var(--text-muted)]">
+                  Recipient EVM Address
+                </label>
+                <input
+                  value={draftFields.recipient_evm_address}
+                  onChange={(event) =>
+                    setDraftFields((current) => ({
+                      ...current,
+                      recipient_evm_address: event.target.value,
+                    }))
+                  }
+                  className="input-dark"
+                  placeholder="0x47d0079dA447f21bEea09B209BCad84A5d2d2705"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-[var(--text-muted)]">
+                  Preferred Payout Chain
+                </label>
+                <select
+                  value={draftFields.preferred_payout_chain}
+                  onChange={(event) =>
+                    setDraftFields((current) => ({
+                      ...current,
+                      preferred_payout_chain: event.target.value,
+                    }))
+                  }
+                  className="input-dark"
+                >
+                  <option value="">Auto-detect</option>
+                  <option value="base_sepolia">Base Sepolia</option>
+                  <option value="solana">Solana</option>
+                </select>
               </div>
             </div>
 
@@ -1040,6 +1281,14 @@ function ProjectCard({
                 className="btn-secondary px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {activeAction === "review" ? "Reviewing..." : "Rerun Review"}
+              </button>
+              <button
+                type="button"
+                onClick={() => runAction("execute")}
+                disabled={activeAction !== null}
+                className="btn-gradient px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {activeAction === "execute" ? "Executing..." : "Execute Funding"}
               </button>
               <button
                 type="button"
@@ -1175,7 +1424,7 @@ function ProjectCard({
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <DetailPanel
             title="Evidence"
-            subtitle="Structured facts, provenance, and collector notes from website, GitHub, Solana, portfolio, and market-intelligence enrichment."
+            subtitle="Facts and provenance."
           >
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -1351,7 +1600,7 @@ function ProjectCard({
 
           <DetailPanel
             title="Market Intelligence"
-            subtitle="Gemini-backed market synthesis plus deterministic market, GitHub, and wallet-derived metrics."
+            subtitle="Market metrics."
           >
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -1396,7 +1645,7 @@ function ProjectCard({
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <DetailPanel
             title="Feature Vector"
-            subtitle="Deterministic normalized features used by the scoring engine. No LLM interpretation happens here."
+            subtitle="Deterministic features."
           >
             {project.feature_vector ? (
               <div className="space-y-4">
@@ -1450,7 +1699,7 @@ function ProjectCard({
 
           <DetailPanel
             title="Claim Assessments"
-            subtitle="Deterministic contradiction and support checks run over proposal claims and normalized evidence."
+            subtitle="Support and contradiction checks."
           >
             {claimAssessments.length > 0 ? (
               <div className="space-y-3">
@@ -1510,7 +1759,7 @@ function ProjectCard({
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <DetailPanel
             title="Scorecard"
-            subtitle="Deterministic subscores, risk banding, reason codes, and missingness-aware confidence."
+            subtitle="Subscores and risk."
           >
             {project.scorecard ? (
               <div className="space-y-4">
@@ -1596,7 +1845,7 @@ function ProjectCard({
 
           <DetailPanel
             title="Funding Package Draft"
-            subtitle="Deterministic package recommendation generated before the agent proposes its final decision contract."
+            subtitle="Draft recommendation."
           >
             {project.funding_package_draft ? (
               <div className="space-y-4">
@@ -1691,7 +1940,7 @@ function ProjectCard({
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <DetailPanel
             title="Treasury"
-            subtitle="Reserve buckets, liquidity safety constraints, and idle-capital allocation suggestions."
+            subtitle="Buckets and allocation."
           >
             {project.treasury_allocation ? (
               <div className="space-y-4">
@@ -1795,7 +2044,7 @@ function ProjectCard({
 
           <DetailPanel
             title="Verifier"
-            subtitle="Formal policy checks run on the agent recommendation before execution."
+            subtitle="Policy checks."
           >
             {project.verifier_result || project.decision_review ? (
               <div className="space-y-4">
@@ -1893,12 +2142,171 @@ function ProjectCard({
               </p>
             )}
           </DetailPanel>
+
+          <DetailPanel
+            title="Execution"
+            subtitle="Funding handoff."
+          >
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+                <KpiCard
+                  label="Status"
+                  value={
+                    <Badge tone={executionStatusTone(project.execution_status)}>
+                      {labelize(project.execution_status)}
+                    </Badge>
+                  }
+                />
+                <KpiCard
+                  label="Chain"
+                  value={labelize(
+                    typeof executionPlan?.payout_chain === "string"
+                      ? executionPlan.payout_chain
+                      : project.preferred_payout_chain,
+                  )}
+                />
+                <KpiCard
+                  label="Immediate Payout"
+                  value={executionHasImmediatePayout ? "Yes" : "No"}
+                />
+                <KpiCard label="Escrows" value={executionEscrowActions} />
+                <KpiCard label="Records" value={executionRecords.length} />
+                <KpiCard label="Tx Hashes" value={executionTxHashes.length} />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {project.recipient_solana_address && (
+                  <Badge>{`Solana: ${shortenWallet(project.recipient_solana_address)}`}</Badge>
+                )}
+                {project.recipient_evm_address && (
+                  <Badge>{`EVM: ${shortenWallet(project.recipient_evm_address)}`}</Badge>
+                )}
+              </div>
+
+              {executionEscrowUids.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-[var(--text-muted)]">Escrow UIDs</p>
+                  <div className="flex flex-wrap gap-2">
+                    {executionEscrowUids.map((uid) => (
+                      <Badge key={`${project.id}-escrow-uid-${uid}`}>
+                        {shortenHash(uid)}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {executionTxHashes.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-[var(--text-muted)]">Transaction Hashes</p>
+                  <div className="flex flex-wrap gap-2">
+                    {executionTxHashes.map((hash) => (
+                      <Badge key={`${project.id}-tx-hash-${hash}`}>
+                        {shortenHash(hash)}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <p className="text-xs text-[var(--text-muted)]">Payment Records</p>
+                {executionRecordsLoading ? (
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    Loading payment records...
+                  </p>
+                ) : executionRecordsError ? (
+                  <p className="text-sm text-[var(--error)]">{executionRecordsError}</p>
+                ) : executionRecords.length > 0 ? (
+                  <div className="space-y-3">
+                    {executionRecords.map((record) => (
+                      <div
+                        key={record.record_id}
+                        className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-4 py-4"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-semibold text-white">
+                                {labelize(record.action_type)}
+                              </p>
+                              <Badge tone={recordStatusTone(record.status)}>
+                                {labelize(record.status)}
+                              </Badge>
+                              <Badge>{labelize(record.payout_chain)}</Badge>
+                            </div>
+                            <div className="flex flex-wrap gap-2 text-xs text-[var(--text-muted)]">
+                              <span>{record.provider}</span>
+                              {record.milestone_name && <span>{record.milestone_name}</span>}
+                              {record.verification_method && (
+                                <span>{labelize(record.verification_method)}</span>
+                              )}
+                              {record.created_at && (
+                                <span>{formatDate(record.created_at)}</span>
+                              )}
+                            </div>
+                          </div>
+                          <p className="text-sm font-semibold text-white">
+                            {formatCurrency(record.amount)}
+                          </p>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                          <KpiCard
+                            label="Recipient"
+                            value={<span title={record.recipient}>{shortenWallet(record.recipient)}</span>}
+                          />
+                          <KpiCard
+                            label="Escrow UID"
+                            value={
+                              record.escrow_uid ? (
+                                <span title={record.escrow_uid}>{shortenHash(record.escrow_uid)}</span>
+                              ) : (
+                                "N/A"
+                              )
+                            }
+                          />
+                          <KpiCard
+                            label="Tx Hash"
+                            value={
+                              record.tx_hash ? (
+                                <span title={record.tx_hash}>{shortenHash(record.tx_hash)}</span>
+                              ) : (
+                                "N/A"
+                              )
+                            }
+                          />
+                          <KpiCard
+                            label="Action ID"
+                            value={<span title={record.action_id}>{shortenHash(record.action_id)}</span>}
+                          />
+                        </div>
+
+                        {record.error && (
+                          <p className="mt-3 text-sm text-[var(--error)]">{record.error}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[var(--text-muted)]">
+                    No payout or escrow records exist yet. Run Execute Funding after the verifier approves execution.
+                  </p>
+                )}
+              </div>
+
+              <JsonBlock
+                value={executionPlan}
+                emptyMessage="No execution plan is stored yet. Use Execute Funding after the verifier approves execution."
+              />
+            </div>
+          </DetailPanel>
         </div>
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <DetailPanel
             title="Decision JSON"
-            subtitle="Strict agent recommendation contract before the verifier applies policy checks."
+            subtitle="Agent output."
           >
             {project.decision_package ? (
               <div className="space-y-4">
@@ -1974,7 +2382,7 @@ function ProjectCard({
 
           <DetailPanel
             title="Evaluation Summary"
-            subtitle="Python-side evaluation view translated from the deterministic scorecard for downstream funding and UI presentation."
+            subtitle="Evaluation view."
           >
             {project.evaluation ? (
               <div className="space-y-4">
@@ -2096,17 +2504,15 @@ function StatusPageContent() {
   };
 
   return (
-    <div className="pt-28 pb-20">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="mb-8 animate-fade-in">
+    <div className="page-shell">
+      <div className="page-container page-container-wide">
+        <div className="page-header animate-fade-in">
           <p className="section-label">Track</p>
-          <h1 className="gradient-text mb-3 text-3xl font-bold sm:text-4xl">
-            Proposal Review Status
+          <h1 className="text-3xl font-bold text-white sm:text-4xl">
+            Proposal review
           </h1>
-          <p className="text-[var(--text-muted)]">
-            Search by project name, website, GitHub repo, wallet, or project ID to
-            inspect the full pipeline: proposal input, evidence, feature vector,
-            scorecard, treasury, decision, and verifier output.
+          <p className="text-sm text-[var(--text-muted)]">
+            Search by project name, URL, wallet, or ID.
           </p>
         </div>
 
@@ -2132,10 +2538,6 @@ function StatusPageContent() {
               {loading ? "Searching..." : "Search"}
             </button>
           </form>
-          <p className="mt-3 text-xs text-[var(--text-muted)]">
-            Tip: after submitting a proposal, search by the project ID shown on the
-            success screen for the fastest lookup.
-          </p>
         </div>
 
         {error && (
@@ -2169,17 +2571,16 @@ function StatusPageContent() {
             {results.length === 0 ? (
               <div className="glass-card p-8 text-center sm:p-12">
                 <h3 className="mb-2 text-lg font-semibold text-white">
-                  No projects found matching your search
+                  No matching projects
                 </h3>
                 <p className="mb-6 text-sm text-[var(--text-muted)]">
-                  Double-check the handle, wallet, or repository URL, or submit a
-                  new proposal.
+                  Try a different handle, URL, wallet, or ID.
                 </p>
                 <Link
                   href="/submit"
                   className="btn-gradient inline-block px-6 py-2.5 text-sm font-semibold"
                 >
-                  Submit a Proposal
+                  Submit Proposal
                 </Link>
               </div>
             ) : (
@@ -2203,8 +2604,8 @@ export default function StatusPage() {
   return (
     <Suspense
       fallback={
-        <div className="pt-28 pb-20">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <div className="page-shell">
+          <div className="page-container page-container-wide">
             <div className="glass-card p-6 sm:p-8">
               <div className="space-y-3 animate-pulse">
                 <div className="h-6 w-48 rounded bg-[var(--surface-hover)]" />

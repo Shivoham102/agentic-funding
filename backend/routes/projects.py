@@ -15,12 +15,16 @@ from agents.treasury import TreasuryManagementAgent
 from config import settings
 from database import get_database
 from models.project import (
+    ExecutionStatus,
     FundingDecisionType,
+    FundingExecutionRecord,
+    FundingExecutionResponse,
     ProjectCreate,
     ProjectResponse,
     ProjectStatus,
     ProjectUpdate,
 )
+from services.funding_execution import FundingExecutionError, FundingExecutionService
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 evaluation_agent = EvaluationAgent()
@@ -28,6 +32,7 @@ feature_extraction_agent = FeatureExtractionAgent(node_executable=settings.SCORI
 treasury_agent = TreasuryManagementAgent()
 decision_review_agent = DecisionReviewAgent(node_executable=settings.DECISION_NODE_EXECUTABLE)
 funding_decision_agent = FundingDecisionAgent(treasury_agent)
+funding_execution_service = FundingExecutionService(settings=settings)
 data_collector_agent = DataCollectorAgent(
     unbrowse_api_key=settings.UNBROWSE_API_KEY,
     base_url=settings.UNBROWSE_URL,
@@ -98,6 +103,9 @@ async def _portfolio_projects_for_context(db, current_project_id: ObjectId) -> l
         "website_url": 1,
         "github_url": 1,
         "recipient_wallet": 1,
+        "recipient_solana_address": 1,
+        "recipient_evm_address": 1,
+        "preferred_payout_chain": 1,
         "short_description": 1,
         "description": 1,
         "market_summary": 1,
@@ -116,6 +124,9 @@ async def _portfolio_projects_for_context(db, current_project_id: ObjectId) -> l
                 "website_url": doc.get("website_url"),
                 "github_url": doc.get("github_url"),
                 "recipient_wallet": doc.get("recipient_wallet"),
+                "recipient_solana_address": doc.get("recipient_solana_address"),
+                "recipient_evm_address": doc.get("recipient_evm_address"),
+                "preferred_payout_chain": doc.get("preferred_payout_chain"),
                 "short_description": doc.get("short_description"),
                 "description": doc.get("description"),
                 "market_summary": doc.get("market_summary"),
@@ -208,6 +219,8 @@ async def create_project(project: ProjectCreate) -> ProjectResponse:
         "decision_package": None,
         "verifier_result": None,
         "decision_review": None,
+        "execution_status": ExecutionStatus.not_started.value,
+        "execution_plan_json": None,
         "evaluation": None,
         "funding_decision": None,
         "treasury_allocation": None,
@@ -323,6 +336,41 @@ async def enrich_project(project_id: str) -> ProjectResponse:
             },
         )
         raise HTTPException(status_code=502, detail=f"Enrichment failed: {exc}")
+
+
+@router.post("/{project_id}/execute-funding", response_model=FundingExecutionResponse)
+async def execute_funding(project_id: str) -> FundingExecutionResponse:
+    """Execute a verified funding decision via the configured payout rail."""
+    db = get_database()
+    oid = _parse_object_id(project_id)
+    project_doc = await db.projects.find_one({"_id": oid})
+    if project_doc is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        return await funding_execution_service.execute_project(project_doc, db)
+    except FundingExecutionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail={"code": exc.code, "message": exc.detail})
+
+
+@router.get("/{project_id}/execution-records", response_model=list[FundingExecutionRecord])
+async def get_execution_records(project_id: str) -> list[FundingExecutionRecord]:
+    """Return persisted payout and escrow records for a project."""
+    db = get_database()
+    oid = _parse_object_id(project_id)
+    project_doc = await db.projects.find_one({"_id": oid}, {"_id": 1})
+    if project_doc is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    docs = await (
+        db.funding_execution_records.find({"project_id": project_id}).sort("created_at", DESCENDING).to_list(length=200)
+    )
+
+    records: list[FundingExecutionRecord] = []
+    for doc in docs:
+        doc.pop("_id", None)
+        records.append(FundingExecutionRecord(**doc))
+    return records
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)

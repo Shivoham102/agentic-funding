@@ -15,42 +15,42 @@ export default function Navbar() {
     { href: "/dashboard", label: "Dashboard" },
   ];
 
-  const linkClass = (href: string) => {
-    const isActive = pathname === href;
-    return `text-sm font-medium transition-all duration-300 ${
-      isActive
-        ? "text-white"
-        : "text-[var(--text-muted)] hover:text-white"
-    }`;
-  };
+  const linkClass = (href: string) =>
+    [
+      "inline-flex items-center rounded-full px-3 py-2 text-sm font-medium transition-all duration-200",
+      pathname === href
+        ? "bg-white/8 text-white"
+        : "text-[var(--text-muted)] hover:bg-white/4 hover:text-white",
+    ].join(" ");
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-4">
-        <div className="glass-card px-6 py-3 flex items-center justify-between">
-          <Link href="/" className="text-lg font-bold text-white tracking-tight">
-            <span className="gradient-text">Agentic</span> Funding
+    <nav className="fixed inset-x-0 top-0 z-50">
+      <div className="page-container-wide pt-4">
+        <div className="glass-card grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 px-5 py-4 sm:px-6">
+          <Link href="/" className="min-w-0 text-xl font-semibold text-white">
+            <span className="gradient-text">AutoVC</span>
           </Link>
 
-          {/* Desktop links */}
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden items-center justify-center gap-2 md:flex">
             {links.map((link) => (
               <Link key={link.href} href={link.href} className={linkClass(link.href)}>
                 {link.label}
               </Link>
             ))}
+          </div>
+
+          <div className="hidden justify-self-end md:block">
             <Link href="/submit" className="btn-gradient-sm">
-              Get Funded
+              New Proposal
             </Link>
           </div>
 
-          {/* Mobile hamburger */}
           <button
-            className="md:hidden text-white p-2"
-            onClick={() => setMobileOpen(!mobileOpen)}
+            className="justify-self-end rounded-full border border-[var(--border)] bg-white/4 p-2 text-white md:hidden"
+            onClick={() => setMobileOpen((open) => !open)}
             aria-label="Toggle menu"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               {mobileOpen ? (
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               ) : (
@@ -60,9 +60,8 @@ export default function Navbar() {
           </button>
         </div>
 
-        {/* Mobile dropdown */}
         {mobileOpen && (
-          <div className="md:hidden glass-card mt-2 p-4 flex flex-col gap-3">
+          <div className="glass-card mt-2 flex flex-col gap-2 p-4 md:hidden">
             {links.map((link) => (
               <Link
                 key={link.href}
@@ -75,10 +74,10 @@ export default function Navbar() {
             ))}
             <Link
               href="/submit"
-              className="btn-gradient-sm text-center"
+              className="btn-gradient-sm mt-2 text-center"
               onClick={() => setMobileOpen(false)}
             >
-              Get Funded
+              New Proposal
             </Link>
           </div>
         )}
