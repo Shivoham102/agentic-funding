@@ -7,3 +7,5 @@ python-dotenv
 httpx
 anthropic
 apscheduler
+pytest
+pytest-asyncio
