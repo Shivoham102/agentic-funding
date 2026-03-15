@@ -64,6 +64,55 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Deploying
+
+### Vercel frontend
+
+Use Vercel for the Next.js app in `frontend/`:
+
+1. Import the GitHub repo into Vercel.
+2. Set the **Root Directory** to `frontend`.
+3. Build command: `npm run build`
+4. Output setting: leave as Next.js default
+5. Add `NEXT_PUBLIC_API_URL=https://your-backend-url`
+
+### Backend hosting
+
+The current backend is not a good fit for Vercel serverless as-is because it depends on:
+
+- a long-lived FastAPI app
+- MongoDB
+- local/CLI-backed integrations such as NLA payments
+- a local Unbrowse server flow in development
+
+Host the backend separately on a Python-friendly service such as Railway, Render, or Fly.io, then point the Vercel frontend to that URL.
+
+Backend envs you must set in production:
+
+- `MONGODB_URL`
+- `DATABASE_NAME`
+- `BACKEND_CORS_ORIGINS=https://your-vercel-app.vercel.app`
+- optionally `BACKEND_CORS_ORIGIN_REGEX=https://.*\\.vercel\\.app`
+- any live keys you actually want enabled, such as `GITHUB_API_TOKEN`, `GEMINI_API_KEY`, and payment/oracle secrets
+
+Recommended production shape:
+
+- Frontend: Vercel
+- Backend: Railway / Render / Fly.io
+- Database: MongoDB Atlas
+
+### Minimal deploy checklist
+
+1. Deploy backend first and confirm `/health` returns `healthy`.
+2. Set backend CORS to allow your Vercel domain.
+3. Deploy `frontend` on Vercel.
+4. Set `NEXT_PUBLIC_API_URL` in Vercel to the backend URL.
+5. Open the deployed app and test:
+   - submit
+   - enrich
+   - review
+   - execute funding
+
 ## Project Structure
 
 ```

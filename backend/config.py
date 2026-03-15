@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import List
 
 from pydantic_settings import BaseSettings
 
@@ -9,6 +10,8 @@ ENV_FILE = Path(__file__).resolve().parent / ".env"
 class Settings(BaseSettings):
     MONGODB_URL: str = "mongodb://localhost:27017"
     DATABASE_NAME: str = "agentic_funding"
+    BACKEND_CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
+    BACKEND_CORS_ORIGIN_REGEX: str = ""
     UNBROWSE_API_KEY: str = ""
     UNBROWSE_URL: str = "http://127.0.0.1:6969"
     UNBROWSE_TIMEOUT_SECONDS: float = 45.0
@@ -86,6 +89,14 @@ class Settings(BaseSettings):
     # LLM Provider Keys (for NLA oracle arbitration)
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
+
+    @property
+    def cors_origins(self) -> List[str]:
+        return [
+            origin.strip()
+            for origin in self.BACKEND_CORS_ORIGINS.split(",")
+            if origin.strip()
+        ]
 
     class Config:
         env_file = ENV_FILE
