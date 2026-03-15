@@ -12,7 +12,34 @@ router = APIRouter(prefix="/api/payments", tags=["payments"])
 
 settings = Settings()
 payment_agent = PaymentAgent(settings)
-data_collector = DataCollectorAgent(settings.UNBROWSE_API_KEY)
+data_collector = DataCollectorAgent(
+    unbrowse_api_key=settings.UNBROWSE_API_KEY,
+    base_url=settings.UNBROWSE_URL,
+    timeout_seconds=settings.UNBROWSE_TIMEOUT_SECONDS,
+    max_retries=settings.UNBROWSE_MAX_RETRIES,
+    solana_rpc_url=settings.SOLANA_RPC_URL,
+    solana_commitment=settings.SOLANA_RPC_COMMITMENT,
+    solana_recent_signature_limit=settings.SOLANA_RECENT_SIGNATURE_LIMIT,
+    solana_analytics_provider=settings.SOLANA_ANALYTICS_PROVIDER,
+    solana_analytics_signature_limit=settings.SOLANA_ANALYTICS_SIGNATURE_LIMIT,
+    solana_timeout_seconds=settings.SOLANA_TIMEOUT_SECONDS,
+    solana_max_retries=settings.SOLANA_MAX_RETRIES,
+    github_api_url=settings.GITHUB_API_URL,
+    github_api_token=settings.GITHUB_API_TOKEN,
+    github_timeout_seconds=settings.GITHUB_TIMEOUT_SECONDS,
+    github_max_retries=settings.GITHUB_MAX_RETRIES,
+    github_commits_lookback_days=settings.GITHUB_COMMITS_LOOKBACK_DAYS,
+    github_max_pages=settings.GITHUB_MAX_PAGES,
+    gemini_api_key=settings.GEMINI_API_KEY,
+    gemini_api_url=settings.GEMINI_API_URL,
+    gemini_market_model=settings.GEMINI_MARKET_MODEL,
+    gemini_timeout_seconds=settings.GEMINI_TIMEOUT_SECONDS,
+    gemini_max_retries=settings.GEMINI_MAX_RETRIES,
+    gemini_min_request_interval_seconds=settings.GEMINI_MIN_REQUEST_INTERVAL_SECONDS,
+    market_search_timeout_seconds=settings.MARKET_SEARCH_TIMEOUT_SECONDS,
+    market_search_results_per_query=settings.MARKET_SEARCH_RESULTS_PER_QUERY,
+    market_max_source_documents=settings.MARKET_MAX_SOURCE_DOCUMENTS,
+)
 oracle = EscrowOracle(payment_agent, data_collector)
 
 

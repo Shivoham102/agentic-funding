@@ -58,10 +58,30 @@ class EvaluationAgent:
         stage = self._enum_value(project.get("stage"), ProjectStage.mvp.value)
         category = self._enum_value(project.get("category"), ProjectCategory.other.value)
         enriched = self._as_dict(project.get("enriched_data"))
-        metrics = self._as_dict(enriched.get("metrics"))
+        feature_vector = self._as_dict(project.get("feature_vector"))
+        feature_numeric = self._as_dict(feature_vector.get("numeric"))
+        feature_categorical = self._as_dict(feature_vector.get("categorical"))
+        feature_missingness = self._as_dict(feature_vector.get("missingness_summary"))
 
-        data_completeness = self._calculate_data_completeness(project, metrics)
-        evidence_coverage = self._calculate_evidence_coverage(project, enriched, metrics)
+        metrics = self._as_dict(enriched.get("metrics"))
+        metrics = self._merge_metrics(metrics, feature_numeric)
+        thin_evidence_categories = self._string_list(feature_categorical.get("thin_evidence_categories"))
+        if thin_evidence_categories:
+            metrics["thin_evidence_categories"] = thin_evidence_categories
+            metrics["thin_evidence_category_count"] = float(len(thin_evidence_categories))
+        missing_total = self._to_float(feature_missingness.get("total_missing_count"))
+        if missing_total > 0:
+            metrics["missingness_total"] = missing_total
+        missing_evidence = self._to_float(feature_missingness.get("missing_evidence_fields"))
+        if missing_evidence > 0:
+            metrics["missing_evidence_fields"] = missing_evidence
+
+        data_completeness = self._metric(feature_numeric, "proposal_completeness_ratio")
+        if data_completeness <= 0:
+            data_completeness = self._calculate_data_completeness(project, metrics)
+        evidence_coverage = self._metric(feature_numeric, "evidence_category_coverage_ratio")
+        if evidence_coverage <= 0:
+            evidence_coverage = self._calculate_evidence_coverage(project, enriched, metrics)
 
         team_quality = self._score_team_quality(project, metrics, stage, category)
         market_opportunity = self._score_market_opportunity(project, metrics, category)
@@ -127,6 +147,7 @@ class EvaluationAgent:
             risk_classification=risk_classification,
             project=project,
             metrics=metrics,
+            feature_vector=feature_vector,
         )
         policy_notes = self._build_policy_notes(
             requested_funding=requested_funding,
@@ -181,6 +202,12 @@ class EvaluationAgent:
         repo_contributors = self._metric(metrics, "repo_contributors", "contributors")
         score += min(repo_contributors * 2.0, 8.0)
 
+        team_fact_count = self._metric(metrics, "team_fact_count")
+        if team_fact_count >= 3:
+            score += 4.0
+        elif 0 < team_fact_count < 2:
+            score += 2.0
+
         if project.get("github_url"):
             score += 8.0
 
@@ -217,6 +244,15 @@ class EvaluationAgent:
         validation = self._normalize_score(self._metric(metrics, "market_validation_score"))
         score += validation * 0.10
 
+        demand_score = self._normalize_score(self._metric(metrics, "market_demand_score"))
+        score += demand_score * 0.12
+
+        trend_score = self._normalize_score(self._metric(metrics, "market_trend_score"))
+        score += trend_score * 0.08
+
+        intelligence_score = self._normalize_score(self._metric(metrics, "market_intelligence_score"))
+        score += intelligence_score * 0.12
+
         competition = self._normalize_score(self._metric(metrics, "competition_intensity", "competition_score"))
         score -= competition * 0.08
 
@@ -228,6 +264,12 @@ class EvaluationAgent:
         paying_customers = self._metric(metrics, "customers", "paying_customers")
         if active_users >= 5_000 or paying_customers >= 100:
             score += 5.0
+
+        market_fact_count = self._metric(metrics, "market_fact_count")
+        if market_fact_count >= 3:
+            score += 4.0
+        elif market_fact_count <= 0 and self._metric(metrics, "evidence_fact_count") > 0:
+            score -= 6.0
 
         return self._bounded(score)
 
@@ -255,6 +297,15 @@ class EvaluationAgent:
 
         readiness = self._normalize_score(self._metric(metrics, "product_readiness_score", "implementation_maturity_score"))
         score += readiness * 0.12
+
+        novelty_score = self._normalize_score(self._metric(metrics, "market_novelty_score"))
+        score += novelty_score * 0.06
+
+        product_fact_count = self._metric(metrics, "product_fact_count")
+        if product_fact_count >= 3:
+            score += 4.0
+        elif product_fact_count <= 0 and self._metric(metrics, "evidence_fact_count") > 0:
+            score -= 6.0
 
         deployments = self._metric(metrics, "deployments_count", "production_deployments")
         score += min(deployments * 3.0, 8.0)
@@ -329,6 +380,16 @@ class EvaluationAgent:
         elif revenue > 0 and requested_funding > revenue * 48:
             score -= 8.0
 
+        budget_coverage = self._metric(metrics, "budget_coverage_ratio")
+        if budget_coverage >= 0.8:
+            score += 4.0
+        elif 0 < budget_coverage < 0.4:
+            score -= 8.0
+
+        funding_per_milestone = self._metric(metrics, "funding_per_milestone_usd")
+        if funding_per_milestone >= 100_000:
+            score -= 6.0
+
         return self._bounded(score)
 
     def _score_traction_signals(
@@ -383,6 +444,16 @@ class EvaluationAgent:
         if len(traction_summary) >= 60:
             score += 5.0
 
+        wallet_activity = self._metric(metrics, "wallet_transactions_30d")
+        if wallet_activity >= 100:
+            score += 5.0
+        elif wallet_activity >= 25:
+            score += 2.0
+
+        traction_fact_count = self._metric(metrics, "traction_fact_count")
+        if traction_fact_count >= 3:
+            score += 3.0
+
         return self._bounded(score)
 
     def _score_risk_indicators(
@@ -430,10 +501,31 @@ class EvaluationAgent:
         if isinstance(risk_flags, list):
             score -= min(len(risk_flags) * 8.0, 24.0)
 
+        market_confidence = self._normalize_score(self._metric(metrics, "market_intelligence_confidence_score"))
+        if 0 < market_confidence < 45:
+            score -= 8.0
+        elif 45 <= market_confidence < 60:
+            score -= 4.0
+
         if data_completeness < 0.6:
             score -= 12.0
         if evidence_coverage < 0.5:
             score -= 8.0
+
+        contradiction_count = self._metric(metrics, "contradiction_flag_count")
+        score -= min(contradiction_count * 4.0, 16.0)
+
+        stale_fact_ratio = self._metric(metrics, "stale_fact_ratio")
+        score -= stale_fact_ratio * 18.0
+
+        thin_evidence_categories = self._metric(metrics, "thin_evidence_category_count")
+        score -= min(thin_evidence_categories * 3.0, 12.0)
+
+        missing_evidence_fields = self._metric(metrics, "missing_evidence_fields")
+        if missing_evidence_fields >= 6:
+            score -= 8.0
+        elif missing_evidence_fields >= 3:
+            score -= 4.0
 
         return self._bounded(score)
 
@@ -486,6 +578,8 @@ class EvaluationAgent:
             bool(project.get("requested_milestones")),
             bool(metrics),
         ]
+        if self._text(project.get("recipient_wallet")):
+            slots.append(True)
         return sum(1 for slot in slots if slot) / len(slots)
 
     def _calculate_evidence_coverage(
@@ -508,6 +602,10 @@ class EvaluationAgent:
             bool(project.get("budget_breakdown")),
             bool(project.get("requested_milestones")),
         ]
+        if self._text(project.get("recipient_wallet")):
+            slots.append(bool(enriched.get("wallet_scraped")))
+        if project.get("website_url") or project.get("github_url"):
+            slots.append(bool(enriched.get("market_intelligence_applied")))
         return sum(1 for slot in slots if slot) / len(slots)
 
     def _build_observations(
@@ -517,6 +615,7 @@ class EvaluationAgent:
         risk_classification: RiskClassification,
         project: dict[str, Any],
         metrics: dict[str, Any],
+        feature_vector: dict[str, Any] | None = None,
     ) -> tuple[list[str], list[str]]:
         strengths: list[str] = []
         concerns: list[str] = []
@@ -547,12 +646,27 @@ class EvaluationAgent:
         if self._metric(metrics, "monthly_revenue_usd", "mrr_usd") >= 25_000:
             strengths.append("Commercial traction is already visible in revenue data.")
 
+        if self._metric(metrics, "market_intelligence_score") >= 72:
+            strengths.append("Market research indicates strong demand, trend, or differentiation signals.")
+
+        if self._metric(metrics, "competition_intensity", "competition_score") >= 70:
+            concerns.append("Competitive intensity appears high relative to current differentiation evidence.")
+
         if not project.get("github_url") and self._enum_value(project.get("category"), "") in {
             ProjectCategory.defi.value,
             ProjectCategory.infrastructure.value,
             ProjectCategory.developer_tools.value,
         }:
             concerns.append("Missing repository evidence increases execution risk for a technical project.")
+
+        feature_vector = self._as_dict(feature_vector)
+        feature_categorical = self._as_dict(feature_vector.get("categorical"))
+        thin_evidence_categories = self._string_list(
+            feature_categorical.get("thin_evidence_categories") or metrics.get("thin_evidence_categories")
+        )
+        if thin_evidence_categories:
+            labels = ", ".join(item.replace("_", " ") for item in thin_evidence_categories[:3])
+            concerns.append(f"Evidence remains thin for {labels}.")
 
         return strengths[:4], concerns[:5]
 
@@ -600,6 +714,13 @@ class EvaluationAgent:
                 return self._to_float(metrics.get(key))
         return 0.0
 
+    def _merge_metrics(self, metrics: dict[str, Any], feature_numeric: dict[str, Any]) -> dict[str, Any]:
+        merged = dict(metrics)
+        for key, value in feature_numeric.items():
+            if isinstance(value, (int, float)):
+                merged[key] = float(value)
+        return merged
+
     def _normalize_score(self, value: float) -> float:
         if value <= 1:
             value *= 100.0
@@ -630,6 +751,11 @@ class EvaluationAgent:
 
     def _as_dict(self, value: Any) -> dict[str, Any]:
         return value if isinstance(value, dict) else {}
+
+    def _string_list(self, value: Any) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        return [str(item).strip() for item in value if str(item).strip()]
 
     def _text(self, value: Any) -> str:
         return str(value).strip() if value is not None else ""

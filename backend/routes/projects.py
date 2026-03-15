@@ -6,9 +6,12 @@ from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Query
 from pymongo import DESCENDING, ReturnDocument
 
+from agents.data_collector import DataCollectorAgent
 from agents.evaluation import EvaluationAgent
+from agents.feature_extraction import FeatureExtractionAgent
 from agents.funding_decision import FundingDecisionAgent
 from agents.treasury import TreasuryManagementAgent
+from config import settings
 from database import get_database
 from models.project import (
     FundingDecisionType,
@@ -20,8 +23,37 @@ from models.project import (
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 evaluation_agent = EvaluationAgent()
+feature_extraction_agent = FeatureExtractionAgent(node_executable=settings.SCORING_NODE_EXECUTABLE)
 treasury_agent = TreasuryManagementAgent()
 funding_decision_agent = FundingDecisionAgent(treasury_agent)
+data_collector_agent = DataCollectorAgent(
+    unbrowse_api_key=settings.UNBROWSE_API_KEY,
+    base_url=settings.UNBROWSE_URL,
+    timeout_seconds=settings.UNBROWSE_TIMEOUT_SECONDS,
+    max_retries=settings.UNBROWSE_MAX_RETRIES,
+    solana_rpc_url=settings.SOLANA_RPC_URL,
+    solana_commitment=settings.SOLANA_RPC_COMMITMENT,
+    solana_recent_signature_limit=settings.SOLANA_RECENT_SIGNATURE_LIMIT,
+    solana_analytics_provider=settings.SOLANA_ANALYTICS_PROVIDER,
+    solana_analytics_signature_limit=settings.SOLANA_ANALYTICS_SIGNATURE_LIMIT,
+    solana_timeout_seconds=settings.SOLANA_TIMEOUT_SECONDS,
+    solana_max_retries=settings.SOLANA_MAX_RETRIES,
+    github_api_url=settings.GITHUB_API_URL,
+    github_api_token=settings.GITHUB_API_TOKEN,
+    github_timeout_seconds=settings.GITHUB_TIMEOUT_SECONDS,
+    github_max_retries=settings.GITHUB_MAX_RETRIES,
+    github_commits_lookback_days=settings.GITHUB_COMMITS_LOOKBACK_DAYS,
+    github_max_pages=settings.GITHUB_MAX_PAGES,
+    gemini_api_key=settings.GEMINI_API_KEY,
+    gemini_api_url=settings.GEMINI_API_URL,
+    gemini_market_model=settings.GEMINI_MARKET_MODEL,
+    gemini_timeout_seconds=settings.GEMINI_TIMEOUT_SECONDS,
+    gemini_max_retries=settings.GEMINI_MAX_RETRIES,
+    gemini_min_request_interval_seconds=settings.GEMINI_MIN_REQUEST_INTERVAL_SECONDS,
+    market_search_timeout_seconds=settings.MARKET_SEARCH_TIMEOUT_SECONDS,
+    market_search_results_per_query=settings.MARKET_SEARCH_RESULTS_PER_QUERY,
+    market_max_source_documents=settings.MARKET_MAX_SOURCE_DOCUMENTS,
+)
 
 
 class SortField(str, Enum):
@@ -56,13 +88,54 @@ async def _approved_projects_for_treasury(db, current_project_id: ObjectId) -> l
     return await db.projects.find(query).to_list(length=None)
 
 
+async def _portfolio_projects_for_context(db, current_project_id: ObjectId) -> list[dict]:
+    projection = {
+        "name": 1,
+        "category": 1,
+        "stage": 1,
+        "website_url": 1,
+        "github_url": 1,
+        "recipient_wallet": 1,
+        "short_description": 1,
+        "description": 1,
+        "market_summary": 1,
+        "traction_summary": 1,
+        "status": 1,
+    }
+    docs = await db.projects.find({"_id": {"$ne": current_project_id}}, projection).to_list(length=None)
+    portfolio_projects: list[dict] = []
+    for doc in docs:
+        portfolio_projects.append(
+            {
+                "id": str(doc.get("_id")),
+                "name": doc.get("name"),
+                "category": doc.get("category"),
+                "stage": doc.get("stage"),
+                "website_url": doc.get("website_url"),
+                "github_url": doc.get("github_url"),
+                "recipient_wallet": doc.get("recipient_wallet"),
+                "short_description": doc.get("short_description"),
+                "description": doc.get("description"),
+                "market_summary": doc.get("market_summary"),
+                "traction_summary": doc.get("traction_summary"),
+                "status": doc.get("status"),
+            }
+        )
+    return portfolio_projects
+
+
 async def _run_review_pipeline(project_doc: dict) -> dict:
     db = get_database()
     approved_projects = await _approved_projects_for_treasury(db, project_doc["_id"])
+    feature_vector = feature_extraction_agent.extract_features(project_doc)
 
-    evaluation = evaluation_agent.evaluate_project(project_doc)
+    evaluation_input = {
+        **project_doc,
+        "feature_vector": feature_vector,
+    }
+    evaluation = evaluation_agent.evaluate_project(evaluation_input)
     funding_decision, treasury_allocation, status = funding_decision_agent.decide(
-        project=project_doc,
+        project=evaluation_input,
         evaluation=evaluation,
         approved_projects=approved_projects,
     )
@@ -72,6 +145,7 @@ async def _run_review_pipeline(project_doc: dict) -> dict:
         "status": status.value,
         "ranking_score": evaluation.overall_score,
         "funding_amount": funding_decision.funding_package.approved_amount,
+        "feature_vector": feature_vector,
         "evaluation": evaluation.model_dump(mode="json"),
         "funding_decision": funding_decision.model_dump(mode="json"),
         "treasury_allocation": treasury_allocation.model_dump(mode="json"),
@@ -100,6 +174,7 @@ async def create_project(project: ProjectCreate) -> ProjectResponse:
         "ranking_score": None,
         "funding_amount": None,
         "enriched_data": None,
+        "feature_vector": None,
         "evaluation": None,
         "funding_decision": None,
         "treasury_allocation": None,
@@ -156,26 +231,65 @@ async def review_project(project_id: str) -> ProjectResponse:
 
 @router.post("/{project_id}/enrich", response_model=ProjectResponse)
 async def enrich_project(project_id: str) -> ProjectResponse:
-    """Trigger Unbrowse scraping/enrichment for a project (stub).
-
-    Sets the project status to 'processing' and would kick off the
-    DataCollectorAgent to scrape website and GitHub data.
-    """
+    """Run live enrichment, persist structured evidence, and rerun review."""
     db = get_database()
     oid = _parse_object_id(project_id)
+    existing_doc = await db.projects.find_one({"_id": oid})
+    if existing_doc is None:
+        raise HTTPException(status_code=404, detail="Project not found")
 
-    result = await db.projects.find_one_and_update(
+    previous_status = existing_doc.get("status", ProjectStatus.submitted.value)
+
+    processing_doc = await db.projects.find_one_and_update(
         {"_id": oid},
         {"$set": {"status": ProjectStatus.processing.value, "updated_at": datetime.now(timezone.utc)}},
         return_document=ReturnDocument.AFTER,
     )
-    if result is None:
+    if processing_doc is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # TODO: Call DataCollectorAgent to scrape project website_url and github_url
-    # via Unbrowse, then store the enriched data back using PATCH endpoint.
-
-    return _doc_to_response(result)
+    try:
+        portfolio_projects = await _portfolio_projects_for_context(db, oid)
+        enriched_data = await data_collector_agent.collect_and_normalize(
+            processing_doc,
+            portfolio_projects=portfolio_projects,
+        )
+        enriched_doc = await db.projects.find_one_and_update(
+            {"_id": oid},
+            {
+                "$set": {
+                    "enriched_data": enriched_data,
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+        if enriched_doc is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        reviewed_doc = await _run_review_pipeline(enriched_doc)
+        return _doc_to_response(reviewed_doc)
+    except HTTPException:
+        await db.projects.find_one_and_update(
+            {"_id": oid},
+            {
+                "$set": {
+                    "status": previous_status,
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            },
+        )
+        raise
+    except Exception as exc:
+        await db.projects.find_one_and_update(
+            {"_id": oid},
+            {
+                "$set": {
+                    "status": previous_status,
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            },
+        )
+        raise HTTPException(status_code=502, detail=f"Enrichment failed: {exc}")
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)

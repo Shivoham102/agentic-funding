@@ -196,6 +196,7 @@ class ProjectUpdate(BaseModel):
     ranking_score: Optional[float] = None
     funding_amount: Optional[float] = None
     enriched_data: Optional[dict[str, Any]] = None
+    feature_vector: Optional[dict[str, Any]] = None
     escrow_info: Optional[EscrowInfo] = None
     evaluation: Optional[EvaluationResult] = None
     treasury_allocation: Optional[TreasuryAllocation] = None
@@ -210,6 +211,7 @@ class ProjectInDB(ProjectCreate):
     ranking_score: Optional[float] = None
     funding_amount: Optional[float] = None
     enriched_data: Optional[dict[str, Any]] = None
+    feature_vector: Optional[dict[str, Any]] = None
     escrow_info: Optional[EscrowInfo] = None
     evaluation: Optional[EvaluationResult] = None
     treasury_allocation: Optional[TreasuryAllocation] = None

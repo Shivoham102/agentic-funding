@@ -10,7 +10,10 @@ except ImportError:
 try:
     from alkahest_py import AlkahestClient
 except ImportError:
-    AlkahestClient = None
+    try:
+        from alkahest_py.alkahest_py import AlkahestClient
+    except ImportError:
+        AlkahestClient = None
 
 from config import Settings
 
@@ -22,8 +25,12 @@ def _get_alkahest_client():
         from alkahest_py import AlkahestClient
         return AlkahestClient
     except (ImportError, AttributeError) as e:
-        logger.debug("AlkahestClient not available: %s", e)
-        return None
+        try:
+            from alkahest_py.alkahest_py import AlkahestClient
+            return AlkahestClient
+        except (ImportError, AttributeError):
+            logger.debug("AlkahestClient not available: %s", e)
+            return None
 
 
 class PaymentAgent:
@@ -43,7 +50,8 @@ class PaymentAgent:
 
     async def initialize(self) -> None:
         """Initialize the Alkahest client. Call once before using other methods."""
-        if AlkahestClient is None or encode is None:
+        alkahest_client_cls = _get_alkahest_client()
+        if alkahest_client_cls is None or encode is None:
             logger.warning(
                 "Alkahest dependencies are not installed - payment agent running in dry-run mode"
             )
@@ -53,13 +61,8 @@ class PaymentAgent:
             logger.warning("ORACLE_PRIVATE_KEY not set - payment agent running in dry-run mode")
             return
 
-        AlkahestClient = _get_alkahest_client()
-        if AlkahestClient is None:
-            logger.warning("AlkahestClient not available - payment agent running in dry-run mode")
-            return
-
         try:
-            self.client = AlkahestClient(
+            self.client = alkahest_client_cls(
                 self.settings.ORACLE_PRIVATE_KEY,
                 self.settings.BASE_SEPOLIA_RPC_URL,
             )
