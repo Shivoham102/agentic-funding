@@ -42,10 +42,17 @@ class PaymentAgent:
 
         # Switch to base-sepolia network
         try:
-            await self._run_nla(["switch", "base-sepolia"])
+            await self._run_nla(["switch", "base-sepolia"], include_auth=False)
             logger.info("NLA CLI configured for Base Sepolia")
         except Exception as e:
             logger.warning(f"Could not switch NLA network: {e}")
+
+        # Set wallet in NLA config
+        try:
+            await self._run_nla(["wallet:set", "--private-key", self.settings.ORACLE_PRIVATE_KEY], include_auth=False)
+            logger.info("NLA wallet configured")
+        except Exception as e:
+            logger.warning(f"Could not set NLA wallet: {e}")
 
         self._initialized = True
         logger.info("Payment agent initialized with NLA CLI")
@@ -65,10 +72,20 @@ class PaymentAgent:
             env["ANTHROPIC_API_KEY"] = self.settings.ANTHROPIC_API_KEY
         return env
 
-    async def _run_nla(self, args: list[str]) -> str:
+    async def _run_nla(self, args: list[str], include_auth: bool = True) -> str:
         """Run an NLA CLI command and return stdout."""
         cmd = [self._nla_path] + args
-        logger.info(f"Running: nla {' '.join(args)}")
+
+        # Append auth flags to all commands that need them
+        if include_auth and args[0] not in ("switch", "help", "network", "wallet:set", "wallet:show", "wallet:clear", "stop"):
+            if self.settings.ORACLE_PRIVATE_KEY and "--private-key" not in args:
+                cmd.extend(["--private-key", self.settings.ORACLE_PRIVATE_KEY])
+            if self.settings.BASE_SEPOLIA_RPC_URL and "--rpc-url" not in args:
+                cmd.extend(["--rpc-url", self.settings.BASE_SEPOLIA_RPC_URL])
+
+        # Log command without private key
+        safe_cmd = " ".join(a if not a.startswith("0x") or len(a) < 20 else a[:10] + "..." for a in cmd)
+        logger.info(f"Running: {safe_cmd}")
 
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -81,12 +98,15 @@ class PaymentAgent:
         stderr_str = stderr.decode().strip()
 
         if process.returncode != 0:
-            error_msg = stderr_str or stdout_str
-            logger.error(f"NLA command failed: {error_msg}")
-            raise RuntimeError(f"NLA CLI error: {error_msg}")
+            error_msg = stderr_str or stdout_str or f"NLA exited with code {process.returncode}"
+            logger.error(f"NLA command failed (exit {process.returncode}): {error_msg}")
+            raise RuntimeError(error_msg)
 
+        # Log output for debugging
+        if stdout_str:
+            logger.info(f"NLA stdout: {stdout_str[:200]}")
         if stderr_str:
-            logger.debug(f"NLA stderr: {stderr_str}")
+            logger.debug(f"NLA stderr: {stderr_str[:200]}")
 
         return stdout_str
 
