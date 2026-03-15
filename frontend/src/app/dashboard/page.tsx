@@ -105,7 +105,7 @@ function TreasuryCard({
   amount: number;
 }) {
   return (
-    <div className="glass-card p-5">
+    <div className="glass-card motion-card p-5">
       <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
         {title}
       </p>
@@ -148,7 +148,7 @@ export default function DashboardPage() {
   return (
     <div className="page-shell">
       <div className="page-container page-container-wide">
-        <div className="page-header">
+        <div className="page-header animate-fade-in">
           <p className="section-label">Dashboard</p>
           <h1 className="text-3xl font-bold text-white sm:text-4xl">
             Treasury and proposals
@@ -167,7 +167,7 @@ export default function DashboardPage() {
         )}
 
         {!loading && !error && treasury && (
-          <div className="mb-14 grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="motion-stagger-md mb-14 grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
             <TreasuryCard title="Hot Reserve" amount={treasury.hot_reserve} />
             <TreasuryCard title="Committed" amount={treasury.committed_reserve} />
             <TreasuryCard title="Idle Treasury" amount={treasury.idle_treasury} />
@@ -182,7 +182,7 @@ export default function DashboardPage() {
         )}
 
         {!loading && !error && projects.length > 0 && (
-          <div className="mt-4 space-y-12">
+          <div className="motion-stagger-lg mt-4 space-y-12">
             {projects.map((project) => {
               const approvedAmount =
                 project.funding_decision?.funding_package.approved_amount;
@@ -190,7 +190,7 @@ export default function DashboardPage() {
                 project.funding_decision?.milestone_schedule.length ?? 0;
 
               return (
-                <div key={project.id} className="glass-card rounded-[1.6rem] p-6 sm:p-7">
+                <div key={project.id} className="glass-card motion-card rounded-[1.6rem] p-6 sm:p-7">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="max-w-3xl">
                       <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">

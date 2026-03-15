@@ -541,7 +541,7 @@ function KpiCard({
   value: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
+    <div className="motion-card rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-3">
       <p className="mb-1 text-[11px] text-[var(--text-muted)]">{label}</p>
       <div className="text-base font-semibold text-white">{value}</div>
     </div>
@@ -597,7 +597,7 @@ function DetailPanel({
 }) {
   return (
     <div
-      className={`rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 ${className}`.trim()}
+      className={`rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 motion-card ${className}`.trim()}
     >
       <div className="mb-4">
         <p className="text-sm font-semibold text-white">{title}</p>
@@ -942,7 +942,7 @@ function ProjectCard({
   );
 
   return (
-    <div className="glass-card p-6 sm:p-8">
+    <div className="glass-card motion-card p-6 sm:p-8">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
@@ -2553,7 +2553,7 @@ function StatusPageContent() {
         )}
 
         {loading && (
-          <div className="mt-6 space-y-4 animate-fade-in">
+        <div className="motion-stagger-sm mt-6 space-y-4 animate-fade-in">
             {[1, 2].map((item) => (
               <div key={item} className="glass-card p-6">
                 <div className="space-y-3 animate-pulse">
@@ -2567,7 +2567,7 @@ function StatusPageContent() {
         )}
 
         {searched && !loading && !error && (
-          <div className="mt-6 space-y-4 animate-fade-in">
+          <div className="motion-stagger-lg mt-6 space-y-4 animate-fade-in">
             {results.length === 0 ? (
               <div className="glass-card p-8 text-center sm:p-12">
                 <h3 className="mb-2 text-lg font-semibold text-white">

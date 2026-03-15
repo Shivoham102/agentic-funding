@@ -245,7 +245,7 @@ export default function SubmitPage() {
     return (
       <div className="page-shell">
         <div className="page-container">
-          <div className="glass-card p-8 sm:p-12 text-center animate-fade-in">
+          <div className="glass-card motion-card p-8 sm:p-12 text-center animate-scale-in">
             <div
               className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full"
               style={{
@@ -336,8 +336,8 @@ export default function SubmitPage() {
           </div>
         )}
 
-        <div className="glass-card p-6 sm:p-8 animate-fade-in-delay-1">
-          <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="glass-card motion-card p-6 sm:p-8 animate-fade-in-delay-1">
+          <form onSubmit={handleSubmit} className="motion-stagger-sm space-y-6">
             <div>
               <label htmlFor="name" className={labelClass}>
                 Project Name <span className="text-[var(--violet)]">*</span>
@@ -499,7 +499,7 @@ export default function SubmitPage() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 transition-transform duration-300 ease-out hover:-translate-y-1">
               <div className="mb-4">
                 <p className="text-sm font-semibold text-white">Payout Addresses</p>
                 <p className="mt-1 text-xs text-[var(--text-muted)]">
@@ -617,7 +617,7 @@ export default function SubmitPage() {
               </div>
             </div>
 
-            <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 transition-transform duration-300 ease-out hover:-translate-y-1">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-white">Budget Breakdown</p>
@@ -687,7 +687,7 @@ export default function SubmitPage() {
               </div>
             </section>
 
-            <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 transition-transform duration-300 ease-out hover:-translate-y-1">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-white">Founder Milestones</p>

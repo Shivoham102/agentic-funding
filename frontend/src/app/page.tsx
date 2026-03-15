@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 
 const cards = [
   {
@@ -16,15 +19,110 @@ const cards = [
 ];
 
 export default function Home() {
+  const [introVisible, setIntroVisible] = useState(true);
+  const [introFading, setIntroFading] = useState(false);
+  const [introStarted, setIntroStarted] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const dismissIntro = () => {
+    if (introFading || !introVisible) {
+      return;
+    }
+    setIntroFading(true);
+  };
+
+  const startIntro = async () => {
+    if (introStarted) {
+      return;
+    }
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+
+    try {
+      setIntroStarted(true);
+      video.muted = false;
+      video.volume = 1;
+      await video.play();
+    } catch {
+      setIntroStarted(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!introVisible || introFading || introStarted) {
+      return;
+    }
+
+    const idleTimer = setTimeout(() => {
+      dismissIntro();
+    }, 7000);
+
+    return () => {
+      clearTimeout(idleTimer);
+    };
+  }, [introVisible, introFading, introStarted]);
+
+  useEffect(() => {
+    if (!introFading) {
+      return;
+    }
+
+    const cleanupTimer = setTimeout(() => {
+      setIntroVisible(false);
+    }, 900);
+
+    return () => {
+      clearTimeout(cleanupTimer);
+    };
+  }, [introFading]);
+
   return (
     <div className="page-shell">
+      {introVisible && (
+        <div
+          className={`intro-video-overlay${introFading ? " is-fading" : ""}`}
+          onClick={() => {
+            void startIntro();
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              void startIntro();
+            }
+          }}
+          aria-label="Start intro video"
+        >
+          <video
+            ref={videoRef}
+            className="intro-video-element"
+            muted={false}
+            playsInline
+            preload="auto"
+            onEnded={dismissIntro}
+            onError={dismissIntro}
+          >
+            <source src="/Landing_Video_For_Website.mp4" type="video/mp4" />
+          </video>
+          {!introStarted && (
+            <div className="intro-video-prompt">
+              <p className="intro-video-kicker">AutoVC</p>
+              <p className="intro-video-title">Click anywhere to start</p>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="orb -top-16 left-0 h-[24rem] w-[24rem] bg-[var(--violet)]" />
       <div className="orb right-0 top-[22rem] h-[20rem] w-[20rem] bg-[var(--blue)]" />
 
-      <div className="page-container">
+      <div className={`page-container${introVisible ? " site-reveal-pending" : " site-reveal-ready"}`}>
         <section className="flex min-h-[calc(100vh-7.5rem)] items-center">
-          <div className="max-w-[72rem] py-10 sm:py-14">
-            <div className="flex max-w-5xl flex-col gap-12 sm:gap-14">
+          <div className="max-w-[72rem] py-10 sm:py-14 animate-scale-in">
+            <div className="motion-stagger-lg flex max-w-5xl flex-col gap-12 sm:gap-14">
               <h1 className="text-5xl font-bold leading-[1.04] tracking-[-0.04em] text-white sm:text-6xl md:text-7xl">
                 Autonomous infrastructure for startup funding
               </h1>
@@ -45,7 +143,7 @@ export default function Home() {
         </section>
 
         <section className="flex min-h-[90vh] items-center">
-          <div className="max-w-3xl">
+          <div className="motion-stagger-md max-w-3xl">
             <p className="section-label">Architecture</p>
             <h2 className="mt-5 text-4xl font-bold text-white sm:text-5xl">
               How AutoVC Works
@@ -57,11 +155,11 @@ export default function Home() {
         </section>
 
         <section className="flex min-h-[100vh] items-center">
-          <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="motion-stagger-md grid w-full grid-cols-1 gap-3 md:grid-cols-3">
             {cards.map((card) => (
               <div
                 key={card.title}
-                className="glass-card rounded-[14px] p-6"
+                className="glass-card motion-card rounded-[14px] p-6"
               >
                 <div className="flex flex-col gap-3">
                   <p className="text-xl font-semibold text-white">{card.title}</p>
